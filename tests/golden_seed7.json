@@ -1,0 +1,65 @@
+{
+  "config": {
+    "fuse_current_a": 222.222222,
+    "heatwave": "hot",
+    "homes": 200,
+    "mc_runs": 24,
+    "nameplate_kva": 160.0,
+    "outage_minutes": 120,
+    "peak_ambient_c": 42.0,
+    "seed": 7
+  },
+  "headline": [
+    {
+      "blowout_ci_high": 1.0,
+      "blowout_ci_low": 0.857526,
+      "blowout_rate": 1.0,
+      "blowout_runs": 24,
+      "mean_ageing_hours": 11.227024,
+      "mean_homes_dark": 185.625,
+      "mean_minutes_above_32": 0.0,
+      "mean_peak_pu": 2.04053,
+      "mode": "baseline",
+      "n_runs": 24
+    },
+    {
+      "blowout_ci_high": 0.211202,
+      "blowout_ci_low": 0.001054,
+      "blowout_rate": 0.041667,
+      "blowout_runs": 1,
+      "mean_ageing_hours": 13.736332,
+      "mean_homes_dark": 3.25,
+      "mean_minutes_above_32": 0.0,
+      "mean_peak_pu": 1.233871,
+      "mode": "pacer",
+      "n_runs": 24
+    },
+    {
+      "blowout_ci_high": 0.142474,
+      "blowout_ci_low": 0.0,
+      "blowout_rate": 0.0,
+      "blowout_runs": 0,
+      "mean_ageing_hours": 13.165339,
+      "mean_homes_dark": 0.0,
+      "mean_minutes_above_32": 0.0,
+      "mean_peak_pu": 1.271639,
+      "mode": "pacer_beacon",
+      "n_runs": 24
+    }
+  ],
+  "single_trial": {
+    "ageing_hours": 8.37136,
+    "blew": true,
+    "blow_minute_since_restore": 5,
+    "homes_dark": 141,
+    "minutes_above_32": 0.0,
+    "mode": "baseline",
+    "n_devices": 292,
+    "n_homes": 200,
+    "peak_pu": 2.004084,
+    "phases_blown": 2,
+    "seed": 7,
+    "series_sha256": "bff6b09f9a19a32f318c7deba903378e6af602e90f28af44ae2f959fbae75304",
+    "trial_index": 0
+  }
+}
