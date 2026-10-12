@@ -9,10 +9,11 @@ restart. It is deliberately free of any UI dependency so it can run from the
 command line and be regression-tested in isolation.
 
 Public surface:
-    Config, Scenario            -- immutable simulation configuration
+    Config                      -- immutable simulation configuration
     run_trial                   -- one deterministic minute-by-minute trial
     run_monte_carlo             -- N randomised trials with statistics
     ControllerMode              -- BASELINE / PACER / PACER_BEACON
+    HeatwavePreset              -- ambient temperature presets
 """
 
 from engine.config import (
@@ -34,4 +35,4 @@ __all__ = [
     "run_monte_carlo",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

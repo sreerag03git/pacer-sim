@@ -42,7 +42,10 @@ class BeaconParams:
     # surge is coming, so it opens with conservative guidance instead of a wide-
     # open 1.0 that it could only tighten a step too late. The value is the fuse
     # fraction of the melting level divided by a worst-case ~2x incoming surge:
-    # 0.85 * 1.45 / 2 ~= 0.6. It then adapts from measurement.
+    # 0.85 * 1.45 / 2 ~= 0.6. It then adapts from measurement: if the first
+    # post-restore minutes show headroom (the surge is still building) it relaxes
+    # gradually at max_relax_step_per_min, and tightens hard (max_tighten_step)
+    # the moment the fuse-heat brake or the current ceiling demands it.
     initial_cap: float = 0.6
     # Phase-lock confidence: lock only if the best correlation is strong and
     # clearly beats the runner-up; otherwise stay unlocked (assume worst phase).
@@ -129,8 +132,10 @@ class Beacon:
         hot each fuse is getting, not merely the instantaneous current.
         """
         if minute_since_restore >= self.p.window_min:
-            # Guidance expires: devices revert to PACER-only behaviour.
-            self._relax_to_one()
+            # Guidance expires at the window end: hard-release so devices truly
+            # revert to PACER-only. By this point the restart surge is long over,
+            # so there is no load step to fear from releasing in one go.
+            self._phase_cap[:] = 1.0
             return
 
         target_pu = self._phase_target_pu(hotspot_per_phase_c)
@@ -154,11 +159,6 @@ class Beacon:
             self.p.max_relax_step_per_min,
         )
         self._phase_cap = np.clip(self._phase_cap + delta, 0.0, 1.0)
-
-    def _relax_to_one(self) -> None:
-        self._phase_cap = np.minimum(
-            1.0, self._phase_cap + self.p.max_relax_step_per_min
-        )
 
     def device_caps(self) -> np.ndarray:
         """Per-device duty ceiling from the broadcast. Unlocked devices take the

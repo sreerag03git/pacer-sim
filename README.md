@@ -65,13 +65,14 @@ current ("tight fuse"), 120-min outage, 42 °C peak-summer evening.
 
 | Mode | Blow-outs | Rate | Homes dark | Peak × rating | Ageing (h) |
 |------|-----------|------|------------|---------------|------------|
-| Baseline | 200 / 200 | 100.0% | 189.4 | 2.04 | 10.6 |
-| PACER only | 17 / 200 | 8.5% | 6.6 | 1.23 | 13.0 |
-| PACER + Beacon | 8 / 200 | 4.0% | 3.6 | 1.27 | 12.5 |
+| Baseline | 200 / 200 | 100.0% | 189.0 | 2.04 | 10.6 |
+| PACER only | 16 / 200 | 8.0% | 6.2 | 1.23 | 13.0 |
+| PACER + Beacon | 12 / 200 | 6.0% | 4.7 | 1.29 | 12.5 |
 
-Baseline vs PACER: z = +18.4, p ≈ 2e-75. Baseline vs PACER+Beacon: z = +19.2,
-p ≈ 3e-82. (Clopper–Pearson intervals and the pairwise two-proportion tests are
-printed by the CLI.)
+Baseline vs PACER: z = +18.5, p ≈ 4e-76. Baseline vs PACER+Beacon: z = +18.8,
+p ≈ 4e-79. PACER vs PACER+Beacon: z = +0.8, p = 0.43 (**not** significant).
+(Clopper–Pearson intervals and the pairwise two-proportion tests are printed by
+the CLI.)
 
 ---
 
@@ -89,34 +90,44 @@ What the engine actually produces, and where it differs:
 - **Baseline — matches.** 200/200 blow-outs, ~189 homes dark (published ~197),
   peak ≈ 2.0× rating ("roughly doubling"). The lockstep restart is a genuine,
   reproducible collapse.
-- **PACER-only — same order, honestly a little *better*: 17/200 (8.5%) vs 25/200
+- **PACER-only — same order, honestly a little *better*: 16/200 (8.0%) vs 25/200
   (12.5%).** The impedance-normalised stress sensing (Rule 4) throttles the
   heavy phase before the fuse melts, holding the restart plateau to ~1.23×, just
   under the fuse. If anything our engine is *more* optimistic about PACER than the
   deck; we report it rather than inflate it.
-- **PACER + Beacon — reduces PACER's blow-outs by roughly half (8/200), but does
-  not reach ≤1 at this operating point.** Two honest reasons: (a) the health-first
-  heat-dose floor (Rule 7) is implemented as *always wins*, so under heat it can
-  legitimately override the Beacon's fuse guidance — a real health-vs-fuse
-  tension, not a bug; (b) the Beacon senses with a one-minute lag. Its benefit
-  grows with heat stress (below).
+- **PACER + Beacon — no statistically significant benefit over PACER-only in this
+  engine, and we do *not* reproduce the published "≤1".** At the default it is
+  12/200 vs 16/200 (p = 0.43); in a 46 °C heatwave it is 113/200 vs 114/200 — a
+  wash. Two honest reasons: (a) in cool conditions PACER's local throttling
+  already holds the plateau below the fuse, so the Beacon has little to add; (b)
+  in hot conditions the health-first Rule 7 overrides the Beacon's fuse guidance
+  exactly when blows occur — a genuine health-vs-fuse tension. An earlier build
+  *did* show the Beacon helping under heat, but that benefit turned out to rest on
+  an over-counting heat-dose bug (the floor grew by wall-clock since the first
+  32 °C crossing instead of by cumulative minutes above 32 °C); fixing it removed
+  the apparent advantage. We report the wash rather than tune the Beacon to hit
+  ≤1 — which is exactly why auditing and reporting honestly is the point.
 
 ### It is physics, not a fitted point — temperature sensitivity
 
 Holding everything else fixed and sweeping only the peak ambient temperature
 (80 runs/point) gives a smooth, physical curve — exactly what an un-rigged model
-should look like:
+should look like. PACER and PACER+Beacon track together within sampling noise;
+baseline is 100% throughout:
 
 | Peak °C | Baseline | PACER | PACER+Beacon |
 |--------:|---------:|------:|-------------:|
 | 38 | 100% | 0% | 0% |
-| 40 | 100% | 1% | 0% |
-| 42 (default) | 100% | ~4–8% | ~0–4% |
-| 43 | 100% | 12% | 8% |
-| 44 | 100% | 28% | 20% |
-| 45 | 100% | 49% | 41% |
+| 40 | 100% | 1% | 1% |
+| 42 (default) | 100% | 4% | 1% |
+| 43 | 100% | 12% | 12% |
+| 44 | 100% | 26% | 28% |
+| 45 | 100% | 46% | 50% |
+| 46 | 100% | 57% | 55% |
 
-The published PACER figure (12.5%) lands near ~43 °C in our engine. We chose
+At 80 runs/point these low rates carry wide confidence intervals (hence the 4%
+here vs 8% in the 200-run headline at 42 °C — the 200-run figure is the
+authoritative one). The published PACER figure (12.5%) lands near ~43 °C. We chose
 42 °C as the default because the deck states its figures hold "even in simulated
 42–45 °C heatwaves", so 42 °C is the faithful low end of that stated band — a
 scenario choice, documented up front, not a value picked to match an output.
@@ -127,8 +138,9 @@ scenario choice, documented up front, not a value picked to match an output.
 
 - **Transformer thermal:** IEC 60076-7 top-oil + hot-spot difference equations at
   1-min steps, with insulation ageing `V = 2^((θ_hs − 98)/6)`. Behind a swappable
-  `TransformerThermalModel` interface; an IEEE C57.91 implementation is included
-  to prove the swap (`engine/thermal.py`).
+  `TransformerThermalModel` interface; a second conforming implementation
+  (IEEE C57.91) is provided and exercised by the tests to demonstrate the swap
+  (`engine/thermal.py`, `tests/test_engine.py`).
 - **Fuse:** per-phase first-order element-heating surrogate for the fuse's I²t
   time-current curve — inverse-time, rides through brief surges, never melts at
   rated, blows at 100% fuse-heat (`engine/fuse.py`).

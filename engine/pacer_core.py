@@ -103,7 +103,7 @@ class PacerController:
         self._latch_until = np.full(D, -1, dtype=int)
         self._heat_active = np.zeros(D, dtype=bool)
         self._heat_floor = np.zeros(D)
-        self._heat_start = np.zeros(D, dtype=int)
+        self._heat_minutes = np.zeros(D)  # cumulative minutes this device has been above 32 C
         self._on_prev = np.zeros(D, dtype=bool)
         self._last_off = np.full(D, -10_000, dtype=int)
         self._start_ring = np.full((D, self.p.max_starts_per_hour), -10_000, dtype=int)
@@ -155,7 +155,15 @@ class PacerController:
         self._have_prev = True
 
     def learned_normal_v(self, minute_abs: int) -> np.ndarray:
-        """Per-device learned normal voltage for the current time-of-day bin."""
+        """Per-device learned normal voltage for the current time-of-day bin.
+
+        The learner keeps per-time-of-day bins as the spec requires. In a single
+        simulated day the warm-up trains only the afternoon bins, so when the
+        evening recovery queries an as-yet-unseen bin it falls back to the
+        device's learned all-day mean (and then to nominal). Over repeated days a
+        deployed device would populate the evening bins directly; the fallback is
+        the honest single-day behaviour, not a separate heuristic.
+        """
         b = self._tod_bin(minute_abs)
         cnt = self._bin_cnt[:, b]
         out = np.where(cnt > 0, self._bin_sum[:, b] / np.maximum(cnt, 1.0), np.nan)
@@ -183,7 +191,7 @@ class PacerController:
         self._latch_until[:] = -1
         self._heat_active[:] = False
         self._heat_floor[:] = 0.0
-        self._heat_start[:] = 0
+        self._heat_minutes[:] = 0.0
         self._on_prev[:] = False
         self._last_off[:] = -10_000
         self._start_ring[:] = -10_000
@@ -280,20 +288,22 @@ class PacerController:
         self._cap = np.clip(self._cap, 0.0, 1.0)
 
         # Rule 7: heat-dose floor (always wins over back-off and soft start).
+        # The dose accrues from cumulative minutes spent above 32 C, not wall-clock
+        # since the first crossing, so a cooling interval pauses the floor (rather
+        # than letting it keep climbing) and it resumes on re-entry. At the first
+        # hot minute the counter is zero, giving the 55% start exactly.
         hot = active & (room_temp > p.heat_trigger_c)
-        newly_hot = hot & (~self._heat_active)
-        self._heat_active = self._heat_active | newly_hot
-        self._heat_start = np.where(newly_hot, m, self._heat_start)
-        self._heat_floor = np.where(newly_hot, p.heat_start_duty, self._heat_floor)
+        self._heat_active = self._heat_active | hot
         rate = np.where(self.dev.is_vulnerable, p.heat_rate_vuln_per_min, p.heat_rate_per_min)
-        active_heat = self._heat_active & active
         self._heat_floor = np.where(
-            active_heat,
-            np.minimum(1.0, p.heat_start_duty + rate * (m - self._heat_start)),
+            self._heat_active,
+            np.minimum(1.0, p.heat_start_duty + rate * self._heat_minutes),
             self._heat_floor,
         )
         self._cap = np.where(hot, np.maximum(self._cap, self._heat_floor), self._cap)
         self._cap = np.clip(self._cap, 0.0, 1.0)
+        # Accrue one minute of heat dose for every minute actually above 32 C.
+        self._heat_minutes = np.where(hot, self._heat_minutes + 1.0, self._heat_minutes)
 
         # Serve: never exceed demand; the controller only ever caps, never adds load.
         served = np.where(active, np.minimum(demand, self._cap), 0.0)

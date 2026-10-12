@@ -20,11 +20,10 @@ import streamlit as st
 from engine.config import Config, ControllerMode, HeatwavePreset
 from engine.montecarlo import MonteCarloResult, run_monte_carlo
 from engine.simulation import TrialResult, run_trial
-from engine.stats import clopper_pearson
 from theme import phase_colors, semantic, theme_css, themed_figure
 
-APP_VERSION = "0.1.0"
-BUILD_DATE = "2026-10-08"
+APP_VERSION = "0.2.0"
+BUILD_DATE = "2026-10-13"
 
 st.set_page_config(
     page_title="PACER-Sim",
@@ -101,7 +100,8 @@ def _sidebar() -> tuple[Config, bool]:
         "Controller mode",
         [m.label for m in ControllerMode],
         index=0,
-        help="The controller used for the single-trial Simulation tab. Monte Carlo and Results always compare all three.",
+        help="Sets only the mode shown first on the Simulation tab; that tab's own "
+        "Mode selector overrides it, and Monte Carlo and Results always compare all three.",
     )
     mode = {m.label: m for m in ControllerMode}[mode_label]
 
@@ -340,7 +340,6 @@ def _tab_simulation(active: dict, theme: str) -> None:
 
     tr = _compute_trial(config, mode.value, int(trial_idx))
 
-    sem = semantic(theme)
     m1, m2, m3, m4, m5 = st.columns(5)
     blow_chip = (
         f'<span class="pacer-chip danger">blow-out</span>' if tr.blew
@@ -559,8 +558,13 @@ def _tab_methodology(theme: str) -> None:
             "- A single transformer is modelled; upstream (HV) dynamics are summarised by a source impedance.\n"
             "- The published 200/25/1 figures are a sanity check, not a fit target. Results are reported honestly; "
             "see the README for the full comparison and the temperature-sensitivity sweep.\n"
-            "- Under extreme heat the health-first Rule 7 can override the Beacon's fuse guidance, so some blow-outs "
-            "remain -- a genuine health-vs-fuse tension, not a modelling error."
+            "- In this engine the Beacon shows no statistically significant benefit over PACER-only: PACER's local "
+            "throttling already clears the fuse in cool conditions, and under heat the health-first Rule 7 overrides "
+            "the Beacon's fuse guidance exactly when blow-outs occur. This health-vs-fuse tension is reported honestly "
+            "(see the README) rather than tuned away.\n"
+            "- Rule 4's voltage learner keeps per-time-of-day bins, but a single simulated day only trains the "
+            "afternoon bins; the evening recovery therefore uses the learned all-day normal. Over repeated days a "
+            "deployed device would populate the evening bins directly."
         )
     _back_to_top()
 

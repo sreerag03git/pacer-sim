@@ -33,10 +33,21 @@ def series_sha256(result: TrialResult) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+# The Clopper-Pearson interval bounds come from scipy.stats.beta.ppf, whose
+# low-order decimals can shift between scipy point releases. They are a pure
+# function of (blowout_runs, n_runs) -- both pinned by the engine -- so excluding
+# them keeps the byte-identical golden check about the engine (numpy) itself and
+# not about a third-party library's rounding.
+_SCIPY_DERIVED_KEYS = ("blowout_ci_low", "blowout_ci_high")
+
+
 def golden_payload(config: Config) -> dict:
     """Compute the full canonical payload used by both fixture and test."""
     result = run_monte_carlo(config)
-    headline = [result.stats[m].summary() for m in result.modes]
+    headline = [
+        {k: v for k, v in result.stats[m].summary().items() if k not in _SCIPY_DERIVED_KEYS}
+        for m in result.modes
+    ]
 
     # A single deterministic trial, with a full time-series hash.
     trial = run_trial(config.with_mode(ControllerMode.BASELINE), trial_index=0)

@@ -285,16 +285,20 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         v_prev_home = v_home_eff
 
     # --- scalar outcomes ---
-    phases_blown = int(np.count_nonzero(fuse.blown))
-    blew = phases_blown > 0
+    # Only blow-outs during recovery count: the headline KPI isolates the restart
+    # surge PACER controls. A fuse that melts during warm-up (possible only in
+    # degenerate, badly under-fused scenarios) is mode-independent noise and would
+    # otherwise pollute the rate, its confidence interval and the pairwise tests.
+    post_blown = fuse.blown & (fuse.blow_minute >= cfg.restore_minute)
+    phases_blown = int(np.count_nonzero(post_blown))
+    blew = bool(np.any(post_blown))
     if blew:
-        valid_blows = fuse.blow_minute[fuse.blown]
-        blow_abs = int(valid_blows.min())
+        blow_abs = int(fuse.blow_minute[post_blown].min())
         blow_rel = blow_abs - cfg.restore_minute
     else:
         blow_abs = -1
         blow_rel = -1
-    homes_dark = int(np.count_nonzero(fuse.blown[dev.home_phase]))
+    homes_dark = int(np.count_nonzero(post_blown[dev.home_phase]))
     minutes_above_32 = float(room_minutes_hot.mean()) if dev.n_rooms else 0.0
 
     return TrialResult(

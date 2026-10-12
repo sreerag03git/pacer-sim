@@ -11,8 +11,6 @@
   },
   "headline": [
     {
-      "blowout_ci_high": 1.0,
-      "blowout_ci_low": 0.857526,
       "blowout_rate": 1.0,
       "blowout_runs": 24,
       "mean_ageing_hours": 11.227024,
@@ -23,8 +21,6 @@
       "n_runs": 24
     },
     {
-      "blowout_ci_high": 0.211202,
-      "blowout_ci_low": 0.001054,
       "blowout_rate": 0.041667,
       "blowout_runs": 1,
       "mean_ageing_hours": 13.736332,
@@ -35,14 +31,12 @@
       "n_runs": 24
     },
     {
-      "blowout_ci_high": 0.142474,
-      "blowout_ci_low": 0.0,
-      "blowout_rate": 0.0,
-      "blowout_runs": 0,
-      "mean_ageing_hours": 13.165339,
-      "mean_homes_dark": 0.0,
+      "blowout_rate": 0.041667,
+      "blowout_runs": 1,
+      "mean_ageing_hours": 13.143892,
+      "mean_homes_dark": 3.25,
       "mean_minutes_above_32": 0.0,
-      "mean_peak_pu": 1.271639,
+      "mean_peak_pu": 1.291673,
       "mode": "pacer_beacon",
       "n_runs": 24
     }

@@ -147,8 +147,9 @@ def build_devices(config: Config, rng: np.random.Generator) -> Devices:
 
     is_vulnerable = home_vulnerable[home]
 
-    # Random hardware faults -> PACER pass-through for that device.
-    fault = rng.random(D) < 0.0  # default 0 probability; the path exists and is exercised by config
+    # Random hardware faults -> PACER pass-through for that device. Zero by
+    # default (config.fault_probability); set it above 0 to exercise the rail.
+    fault = rng.random(D) < config.fault_probability
 
     return Devices(
         kind=kind,

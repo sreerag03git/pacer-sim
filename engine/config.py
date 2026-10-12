@@ -74,6 +74,11 @@ class Config:
     pump_penetration: float = 0.35  # homes with a water pump
     vulnerable_fraction: float = 0.08  # homes registered as heat-vulnerable (Rule 7 priority)
 
+    # Fraction of PACER devices that are faulted. A faulted device falls back to
+    # pass-through (it behaves as if PACER were absent), which is the safety rail
+    # the spec requires. Zero by default; raise it to exercise the pass-through path.
+    fault_probability: float = 0.0
+
     # Uncontrolled base load per home (lights, fans, fridge), kW. This load is NOT
     # paced -- it returns immediately on restoration and sets the floor.
     base_load_kw_per_home: float = 0.18
@@ -170,6 +175,7 @@ class Config:
             round(self.erickshaw_penetration, 6),
             round(self.pump_penetration, 6),
             round(self.vulnerable_fraction, 6),
+            round(self.fault_probability, 6),
             round(self.base_load_kw_per_home, 6),
             round(self.nameplate_kva, 6),
             round(self.v_ln, 6),
@@ -208,6 +214,7 @@ class Config:
             ("e-rickshaw penetration", self.erickshaw_penetration),
             ("pump penetration", self.pump_penetration),
             ("vulnerable fraction", self.vulnerable_fraction),
+            ("fault probability", self.fault_probability),
         ):
             if not (0.0 <= val <= 1.0):
                 problems.append(f"{name} must be between 0 and 100%.")
