@@ -1,8 +1,10 @@
 # PACER-Sim dependencies.
 # The engine/ package needs only numpy + scipy; streamlit, plotly and pandas
-# are for the UI (app.py, theme/). Versions are lower bounds matching a tested install.
+# are for the UI (app.py, theme/). Lower bounds match a tested install; the scipy
+# and pandas floors are the first releases with NumPy 2 support, so a clean
+# install that picks NumPy 2 cannot pair it with an ABI-incompatible build.
 numpy>=2.0
-scipy>=1.11
+scipy>=1.13
 streamlit>=1.40
 plotly>=5.22
-pandas>=2.0
+pandas>=2.2

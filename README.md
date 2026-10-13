@@ -58,6 +58,28 @@ change: `python -m tests._make_golden`.
 
 ---
 
+## Deploy (Streamlit Community Cloud)
+
+The app is self-contained — no secrets, databases or external services — so it
+deploys straight from this repository:
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with the GitHub
+   account that owns this repo.
+2. **Create app → Deploy a public app from GitHub**, then select:
+   - Repository: this repo
+   - Branch: `main`
+   - Main file path: `app.py`
+3. (Optional) Advanced settings → Python 3.11 or 3.12.
+4. Deploy. The first launch installs `requirements.txt` and boots the app.
+
+Note: a full 200-trial Monte Carlo run is CPU-bound and can take a couple of
+minutes on a free single-vCPU host (the progress bar reflects real progress);
+lower "Trials per mode" in the sidebar for a quicker pass. The same app runs
+locally with `streamlit run app.py`, and in a container with any Python 3.10+
+base image (`pip install -r requirements.txt && streamlit run app.py`).
+
+---
+
 ## Headline result (seed 7, 200 runs, default scenario)
 
 Default scenario: 200 homes, 160 kVA transformer, per-phase fuse at rated
