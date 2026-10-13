@@ -13,9 +13,13 @@ identical scenarios:
 
 The physics engine (`engine/`) is **pure Python + numpy with zero Streamlit
 imports**. It runs from the command line and is covered by a golden-regression
-test. A Streamlit UI (`app.py`, `theme/`) drives and reads the engine, with a
-dark/light engineering theme and four tabs (Simulation, Monte Carlo, Results and
-verification, Methodology).
+test. A Streamlit UI (`app.py`, `theme/`) is a full project showcase with a
+dark/light engineering theme, hand-built theme-aware SVG diagrams, and six
+sections: **Overview**, **Problem & solution** (the surge mechanism, the
+three-layer architecture, the seven-rule control loop, feeder and hardware
+drawings), **Simulator** (Simulation, Monte Carlo, Results and verification),
+**Impact & case** (impact assessment, innovation/IP, challenge alignment),
+**Delivery** (user journey, roadmap, methodology), and **Team & about**.
 
 ---
 
@@ -214,6 +218,7 @@ theme/             theme system
   palette.py       the two engineering palettes (exact hexes)
   css.py           injected CSS: CSS variables + Streamlit restyle
   plotly_template.py  Plotly templates bound to the active theme
+  diagrams.py      hand-built, theme-aware SVG diagrams
 .streamlit/        config.toml (first-paint theme, clean chrome)
 tests/             golden-regression + determinism tests
 ```

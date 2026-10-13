@@ -117,6 +117,34 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-foot { color: var(--muted); font-size: 0.76rem; border-top: 1px solid var(--border);
   margin-top: 2rem; padding-top: 0.6rem; font-family: 'IBM Plex Mono', monospace; }
 
+/* Section kicker + lead */
+.pacer-kicker { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 0.1rem; }
+.pacer-lead { color: var(--muted); font-size: 0.98rem; line-height: 1.5; margin: 0.2rem 0 0.8rem 0; }
+
+/* Stat tile */
+.pacer-stat { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 5px;
+  background: var(--surface); padding: 0.7rem 0.85rem; height: 100%; }
+.pacer-stat .n { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums;
+  font-size: 1.5rem; font-weight: 500; color: var(--text); line-height: 1.1; }
+.pacer-stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+.pacer-stat.ok { border-left-color: var(--ok); }
+.pacer-stat.danger { border-left-color: var(--danger); }
+.pacer-stat.caution { border-left-color: var(--caution); }
+.pacer-stat.ok .n { color: var(--ok); }
+.pacer-stat.danger .n { color: var(--danger); }
+
+/* Content card */
+.pacer-card { border: 1px solid var(--border); border-radius: 5px; background: var(--surface);
+  padding: 0.75rem 0.9rem; height: 100%; }
+.pacer-card h4 { margin: 0 0 0.35rem 0; font-size: 0.95rem; }
+.pacer-card ul { margin: 0.2rem 0 0 1rem; padding: 0; }
+.pacer-card li { color: var(--muted); font-size: 0.86rem; margin: 0.15rem 0; }
+.pacer-card.accent { border-left: 3px solid var(--accent); }
+.pacer-card.ok { border-left: 3px solid var(--ok); }
+.pacer-card.caution { border-left: 3px solid var(--caution); }
+.pacer-card.danger { border-left: 3px solid var(--danger); }
+
 /* Skip-to-content link: visible only on keyboard focus */
 .pacer-skip { position: absolute; left: -999px; top: 0; background: var(--accent); color: #fff;
   padding: 0.4rem 0.7rem; border-radius: 0 0 4px 0; z-index: 2000; }
