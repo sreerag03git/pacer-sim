@@ -69,6 +69,16 @@ class TrialResult:
     homes_online: np.ndarray = field(repr=False)
     mean_indoor_c: np.ndarray = field(repr=False)
     ambient_c: np.ndarray = field(repr=False)
+    # richer diagnostics (added for the simulator instrument panel)
+    phase_load_pu: np.ndarray = field(repr=False)  # (T, 3) per-phase load vs per-phase rating
+    appliance_load_kw: np.ndarray = field(repr=False)  # (T, 6) served kW by kind + base load
+    n_serving: np.ndarray = field(repr=False)  # devices actually drawing power
+    n_held: np.ndarray = field(repr=False)  # powered devices capped below their demand (held back)
+    stress_signal: np.ndarray = field(repr=False)  # mean impedance-normalised stress sensed (A)
+    z_estimate_median: float = 0.0  # median self-measured line impedance (ohm)
+    learned_normal_v_mean: float = 0.0  # mean learned-normal voltage at restoration (V)
+
+    APPLIANCE_LABELS = ("Inverter AC", "Fixed AC", "Inverter charger", "E-rickshaw", "Water pump", "Base load")
 
     def scalar_summary(self) -> dict:
         """Compact, order-stable dict of the scalar outcomes (used for hashing)."""
@@ -131,6 +141,12 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     ts_vmin = np.zeros(T)
     ts_online = np.zeros(T)
     ts_indoor = np.zeros(T)
+    ts_phase_pu = np.zeros((T, cfg.phases))
+    ts_appl = np.zeros((T, 6))
+    ts_serving = np.zeros(T)
+    ts_held = np.zeros(T)
+    ts_stress = np.zeros(T)
+    kind_masks = [dev.kind == k for k in range(5)]
 
     rep_home = feeder.representative_home()
     room_minutes_hot = np.zeros(dev.n_rooms)
@@ -278,6 +294,14 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         ts_vmin[t] = connected.min() if connected.size else 0.0
         ts_online[t] = int(np.count_nonzero(supply_home))
         ts_indoor[t] = rooms.t_air.mean() if dev.n_rooms else ambient_c
+        ts_phase_pu[t] = phase_i / cfg.rated_phase_current_a
+        for k in range(5):
+            mk = kind_masks[k]
+            ts_appl[t, k] = float((served[mk] * dev.rated_kw[mk]).sum())
+        ts_appl[t, 5] = float(dev.home_base_kw[supply_home].sum())
+        ts_serving[t] = int(np.count_nonzero(served > 1e-6))
+        ts_held[t] = int(np.count_nonzero(supply_dev & (demand > served + 1e-6)))
+        ts_stress[t] = controller.last_mean_stress if (in_recovery and supply) else 0.0
 
         if in_recovery and dev.n_rooms:
             room_minutes_hot += rooms.t_air > _HEAT_EXPOSURE_C
@@ -300,6 +324,8 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         blow_rel = -1
     homes_dark = int(np.count_nonzero(post_blown[dev.home_phase]))
     minutes_above_32 = float(room_minutes_hot.mean()) if dev.n_rooms else 0.0
+    z_estimate_median = float(np.median(controller.z_estimate))
+    learned_normal_v_mean = float(np.mean(controller.learned_normal_v(cfg.day_start_minute + cfg.restore_minute)))
 
     return TrialResult(
         mode=cfg.mode.value,
@@ -328,4 +354,39 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         homes_online=ts_online,
         mean_indoor_c=ts_indoor,
         ambient_c=amb,
+        phase_load_pu=ts_phase_pu,
+        appliance_load_kw=ts_appl,
+        n_serving=ts_serving,
+        n_held=ts_held,
+        stress_signal=ts_stress,
+        z_estimate_median=z_estimate_median,
+        learned_normal_v_mean=learned_normal_v_mean,
     )
+
+
+def scenario_structure(config: Config, trial_index: int = 0) -> dict:
+    """Describe the simulated population (counts, phase split, connected load)
+    without running a full trial -- fast enough to drive a live 'Structure' view."""
+    rng = np.random.default_rng(np.random.SeedSequence([config.seed, trial_index, 0]))
+    dev = build_devices(config, rng)
+    kind_counts = [int(np.count_nonzero(dev.kind == k)) for k in range(5)]
+    homes_per_phase = [int(np.count_nonzero(dev.home_phase == ph)) for ph in range(config.phases)]
+    devices_per_phase = [int(np.count_nonzero(dev.phase == ph)) for ph in range(config.phases)]
+    kw_per_phase = [float(dev.rated_kw[dev.phase == ph].sum()) for ph in range(config.phases)]
+    kind_kw = [float(dev.rated_kw[dev.kind == k].sum()) for k in range(5)]
+    return {
+        "n_homes": int(config.homes),
+        "n_devices": int(dev.n_devices),
+        "n_ac_homes": int(dev.n_rooms),
+        "n_vulnerable": int(np.count_nonzero(dev.home_vulnerable)),
+        "appliance_labels": list(TrialResult.APPLIANCE_LABELS[:5]),
+        "kind_counts": kind_counts,
+        "kind_connected_kw": kind_kw,
+        "homes_per_phase": homes_per_phase,
+        "devices_per_phase": devices_per_phase,
+        "connected_kw_per_phase": kw_per_phase,
+        "base_kw": float(dev.home_base_kw.sum()),
+        "total_connected_kw": float(dev.rated_kw.sum() + dev.home_base_kw.sum()),
+        "rated_phase_current_a": float(config.rated_phase_current_a),
+        "fuse_current_a": float(config.fuse_current_a),
+    }

@@ -12,8 +12,8 @@ import plotly.graph_objects as go
 
 from theme.palette import palette
 
-_FONT = "IBM Plex Sans, system-ui, sans-serif"
-_MONO = "IBM Plex Mono, monospace"
+_FONT = "Inter, system-ui, sans-serif"
+_MONO = "JetBrains Mono, monospace"
 
 
 def _template(theme: str) -> go.layout.Template:
@@ -61,8 +61,15 @@ def semantic(theme: str) -> dict[str, str]:
 
 
 def style_figure(fig: go.Figure, theme: str, height: int | None = None) -> go.Figure:
-    """Apply the themed template (and optional height) to an existing figure."""
+    """Apply the themed template (and optional height) to an existing figure.
+
+    The backgrounds are forced transparent *directly on the layout* (not only via
+    the template) so the chart always shows the themed page through it -- otherwise
+    Streamlit injects its static config ``[theme]`` colours and the plot would read
+    light even in dark mode.
+    """
     fig.update_layout(template=_template(theme))
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     if height is not None:
         fig.update_layout(height=height)
     return fig

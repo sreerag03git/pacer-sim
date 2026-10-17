@@ -10,7 +10,7 @@ blow-out rate.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Optional, Sequence
 
 import numpy as np
@@ -20,6 +20,16 @@ from engine.simulation import TrialResult, run_trial
 from engine.stats import ProportionCI, TwoProportionTest, clopper_pearson, two_proportion_z_test
 
 ProgressCallback = Callable[[float, str], None]
+
+# Sweepable scenario variables: name -> (Config field, is_percent_fraction).
+SWEEP_VARIABLES: dict[str, str] = {
+    "Ambient peak (C)": "ambient_peak_c",
+    "Fuse tightness (x rated)": "fuse_tightness",
+    "AC penetration (%)": "ac_penetration",
+    "Outage duration (min)": "outage_minutes",
+    "Transformer rating (kVA)": "nameplate_kva",
+    "Vulnerable homes (%)": "vulnerable_fraction",
+}
 
 
 @dataclass
@@ -148,3 +158,47 @@ def run_monte_carlo(
         stats=stats,
         pairwise_tests=tests,
     )
+
+
+@dataclass
+class SweepResult:
+    """Blow-out rate (and homes-dark, peak) for each mode as one scenario variable
+    is swept, holding everything else fixed."""
+
+    field_name: str
+    values: list[float]
+    modes: list[ControllerMode]
+    rate_pct: dict[ControllerMode, list[float]]
+    homes_dark: dict[ControllerMode, list[float]]
+    peak_pu: dict[ControllerMode, list[float]]
+    n_runs: int
+
+
+def run_sweep(
+    base_config: Config,
+    field_name: str,
+    values: Sequence[float],
+    modes: Optional[Sequence[ControllerMode]] = None,
+    progress: Optional[ProgressCallback] = None,
+) -> SweepResult:
+    """Run a Monte Carlo comparison at each value of ``field_name`` (a Config
+    field), returning the blow-out curve per mode. Everything else is held fixed,
+    so the result is a clean sensitivity curve."""
+    if modes is None:
+        modes = [ControllerMode.BASELINE, ControllerMode.PACER, ControllerMode.PACER_BEACON]
+    modes = list(modes)
+    rate = {m: [] for m in modes}
+    dark = {m: [] for m in modes}
+    peak = {m: [] for m in modes}
+    total = max(len(values), 1)
+    for i, v in enumerate(values):
+        cfg = replace(base_config, **{field_name: v})
+        res = run_monte_carlo(cfg, modes=modes)
+        for m in modes:
+            s = res.stats[m]
+            rate[m].append(s.blowout_runs / s.n_runs * 100.0)
+            dark[m].append(s.mean_homes_dark)
+            peak[m].append(s.mean_peak_pu)
+        if progress is not None:
+            progress((i + 1) / total, f"{field_name} = {v}  ({i + 1}/{total})")
+    return SweepResult(field_name, list(values), modes, rate, dark, peak, base_config.mc_runs)

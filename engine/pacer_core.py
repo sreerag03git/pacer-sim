@@ -96,6 +96,10 @@ class PacerController:
         self._prev_i = np.zeros(D)
         self._have_prev = False
 
+        # Diagnostic: the mean impedance-normalised stress (A) sensed last minute,
+        # exposed so the UI can show what the controller is reacting to.
+        self.last_mean_stress = 0.0
+
         # --- dynamic recovery state (set by schedule_restart) ---
         self._started = np.zeros(D, dtype=bool)
         self._start_offset = np.zeros(D, dtype=int)
@@ -217,10 +221,12 @@ class PacerController:
         own demand. PACER never adds load, so there is nothing to shape here."""
         served = np.clip(demand, 0.0, 1.0)
         self._on_prev = served > 1e-6
+        self.last_mean_stress = 0.0
         return served
 
     def serve_baseline(self, minute_since_restore: int, demand: np.ndarray) -> np.ndarray:
         """Baseline stabiliser: a fixed 3-min wait, then full power in lockstep."""
+        self.last_mean_stress = 0.0
         if minute_since_restore < 3:
             return np.zeros(self.D)
         return np.clip(demand, 0.0, 1.0)
@@ -264,6 +270,7 @@ class PacerController:
         vnorm = self.learned_normal_v(minute_abs)
         sag = np.maximum(vnorm - v_sense, 0.0)
         stress_current = sag / np.maximum(self._z_est, p.z_min_ohm)
+        self.last_mean_stress = float(stress_current[active].mean()) if np.any(active) else 0.0
         stressed = stress_current > p.stress_on_a
         unstressed = stress_current < p.stress_off_a
         latch_active = m < self._latch_until

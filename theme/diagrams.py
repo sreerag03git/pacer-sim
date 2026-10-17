@@ -8,8 +8,8 @@ engineering-grade: thin strokes, muted fills, no gradients or shadows.
 
 from __future__ import annotations
 
-_FS = "font-family:'IBM Plex Sans',sans-serif"
-_FM = "font-family:'IBM Plex Mono',monospace"
+_FS = "font-family:'Inter',sans-serif"
+_FM = "font-family:'JetBrains Mono',monospace"
 
 
 # --- small SVG builders ---------------------------------------------------------
@@ -22,7 +22,7 @@ def _wrap(view_w: int, view_h: int, body: str, max_w: int = 960) -> str:
     )
 
 
-def _box(x, y, w, h, title, sub="", accent="var(--accent)", rx=6, title_size=15, fill="var(--surface)"):
+def _box(x, y, w, h, title, sub="", accent="var(--accent)", rx=6, title_size=15, fill="var(--panel)"):
     out = (
         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" '
         f'style="fill:{fill};stroke:{accent};stroke-width:1.5"/>'

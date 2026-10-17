@@ -19,11 +19,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from engine.config import Config, ControllerMode, HeatwavePreset
-from engine.montecarlo import MonteCarloResult, run_monte_carlo
-from engine.simulation import TrialResult, run_trial
+from engine.montecarlo import (
+    SWEEP_VARIABLES,
+    MonteCarloResult,
+    SweepResult,
+    run_monte_carlo,
+    run_sweep,
+)
+from engine.simulation import TrialResult, run_trial, scenario_structure
 from theme import diagrams, phase_colors, semantic, theme_css, themed_figure
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 BUILD_DATE = "2026-10-13"
 
 TEAM = [
@@ -46,6 +52,26 @@ DECK_SCENARIOS = [
     ("Correctly sized fuse", 200, 0, 0),
 ]
 
+# One-click scenario presets -> scenario widget state overrides.
+PRESETS: dict[str, dict] = {
+    "Default (hot evening)": dict(tight=1.00, ambient="Hot (42 C)", custom=42, outage=120, nameplate=160.0, ac=60),
+    "Tight fuse, 38 C": dict(tight=1.00, ambient="Custom", custom=38, outage=120, nameplate=160.0, ac=60),
+    "45 C heatwave": dict(tight=1.00, ambient="Custom", custom=45, outage=150, nameplate=160.0, ac=70),
+    "Correctly sized fuse": dict(tight=1.25, ambient="Hot (42 C)", custom=42, outage=120, nameplate=160.0, ac=60),
+    "Over-fused site": dict(tight=1.40, ambient="Hot (42 C)", custom=42, outage=120, nameplate=160.0, ac=60),
+    "Long cut, high AC": dict(tight=1.00, ambient="Hot (42 C)", custom=42, outage=240, nameplate=160.0, ac=85),
+}
+
+# Sensitivity-sweep ranges per Config field.
+SWEEP_RANGES: dict[str, list[float]] = {
+    "ambient_peak_c": [34.0, 36.0, 38.0, 40.0, 42.0, 44.0, 46.0],
+    "fuse_tightness": [0.80, 0.90, 1.00, 1.10, 1.20, 1.30],
+    "ac_penetration": [0.20, 0.40, 0.60, 0.80, 1.00],
+    "outage_minutes": [30, 60, 90, 120, 180, 240],
+    "nameplate_kva": [120.0, 140.0, 160.0, 180.0, 200.0, 240.0],
+    "vulnerable_fraction": [0.00, 0.05, 0.10, 0.20, 0.30],
+}
+
 st.set_page_config(page_title="PACER-Sim", layout="wide", initial_sidebar_state="expanded")
 
 
@@ -57,8 +83,28 @@ def _compute_trial(config: Config, mode: str, trial_index: int) -> TrialResult:
     return run_trial(config.with_mode(ControllerMode(mode)), trial_index)
 
 
+@st.cache_data(show_spinner=False, hash_funcs={Config: lambda c: c.key()})
+def _compute_modes(config: Config, trial_index: int) -> dict[str, TrialResult]:
+    """One trial per controller mode on the identical scenario (for comparison)."""
+    return {m.value: run_trial(config.with_mode(m), trial_index) for m in ControllerMode}
+
+
+@st.cache_data(show_spinner=False, hash_funcs={Config: lambda c: c.key()})
+def _compute_structure(config: Config) -> dict:
+    return scenario_structure(config)
+
+
 def _config_hash(config: Config) -> str:
     return hashlib.sha1(repr(config.key()).encode()).hexdigest()[:8]
+
+
+_MODE_ORDER = ["baseline", "pacer", "pacer_beacon"]
+_MODE_LABEL = {"baseline": "Baseline", "pacer": "PACER only", "pacer_beacon": "PACER + Beacon"}
+
+
+def _mode_colors(theme: str) -> dict[str, str]:
+    sem = semantic(theme)
+    return {"baseline": sem["danger"], "pacer": sem["accent"], "pacer_beacon": sem["ok"]}
 
 
 def _svg(html: str) -> None:
@@ -97,10 +143,33 @@ def _back_to_top() -> None:
 # ---------------------------------------------------------------------------
 # Session state + header
 # ---------------------------------------------------------------------------
+_SCENARIO_DEFAULTS = dict(
+    sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
+    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=200, sc_seed=7,
+    sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
+)
+
+
 def _init_state() -> None:
     st.session_state.setdefault("theme", "light")
     st.session_state.setdefault("active", None)
     st.session_state.setdefault("confirm_reset", False)
+    st.session_state.setdefault("section", "Simulator")
+    st.session_state.setdefault("ledger", [])
+    st.session_state.setdefault("sim_trial", 0)
+    st.session_state.setdefault("sweep", None)
+    for k, v in _SCENARIO_DEFAULTS.items():
+        st.session_state.setdefault(k, v)
+
+
+def _apply_preset(name: str) -> None:
+    p = PRESETS[name]
+    st.session_state.sc_tight = p["tight"]
+    st.session_state.sc_ambient = p["ambient"]
+    st.session_state.sc_custom = p["custom"]
+    st.session_state.sc_outage = p["outage"]
+    st.session_state.sc_nameplate = p["nameplate"]
+    st.session_state.sc_ac = p["ac"]
 
 
 def _toggle_theme() -> None:
@@ -115,7 +184,7 @@ def _render_header(config: Config, theme: str) -> None:
         c1, c2, c3 = st.columns([6, 3, 2], vertical_alignment="center")
         with c1:
             st.markdown(
-                '<div class="pacer-title">PACER-Sim</div>'
+                '<div class="pacer-title">PACER<span class="dot">-</span>Sim</div>'
                 '<div class="pacer-subtitle">Phase-Aware Coordinated Energisation &amp; Recovery '
                 '-- stopping the blackout after the blackout</div>',
                 unsafe_allow_html=True)
@@ -139,15 +208,24 @@ def _footer(active: dict | None) -> None:
 # ===========================================================================
 # SHOWCASE PAGES
 # ===========================================================================
+def _hero() -> None:
+    st.markdown(
+        '<div class="pacer-hero">'
+        '<div class="eyebrow">Challenge 03 &middot; Grid Reliability &amp; Renewable Intermittency</div>'
+        '<h1>Stopping the blackout after the blackout.</h1>'
+        '<p>When a load-shedding block ends, every AC, inverter charger, pump and e-rickshaw charger '
+        'restarts in lockstep and hits the transformer at ~2x its rating -- the fuse blows and a 2-hour '
+        'cut becomes a 5-hour blackout. PACER puts a seven-rule, communication-free protocol inside the '
+        'devices so they stagger and soften their own restart; an optional per-transformer Beacon makes '
+        'it fuse-aware.</p>'
+        '<div class="tags"><span class="tag">200 &rarr; 1 fuse blow-outs</span>'
+        '<span class="tag">Rs 0 to households</span><span class="tag">8 new mechanisms</span>'
+        '<span class="tag">IEC 60076-7 grounded</span></div></div>',
+        unsafe_allow_html=True)
+
+
 def _page_overview() -> None:
-    _kicker("Challenge 03 - Grid Reliability & Renewable Intermittency",
-            "In the evening, as rooftop solar fades, Indian DISCOMs cut power in scheduled blocks. "
-            "The damage is done at restoration: every AC, inverter charger, water pump and e-rickshaw "
-            "charger restarts within the same few minutes -- because almost every stabiliser waits the "
-            "same fixed 3 minutes -- hitting the transformer at about twice its rating. The fuse blows, "
-            "and a 2-hour cut becomes a 5-hour blackout for the whole street. PACER puts a small, "
-            "communication-free protocol inside the devices that cause the surge, so they stagger and "
-            "soften their own restart; an optional per-transformer Beacon makes it fuse-aware.")
+    _hero()
     _stat_tiles([
         ("200 -> 1", "fuse blow-outs per 200 restorations (deck: Today -> PACER+Beacon)", "ok"),
         ("2,400-3,600", "customer-hours of outage avoided per transformer per summer", "ok"),
@@ -302,7 +380,7 @@ def _page_impact() -> None:
         ("Rs 7-20", "DISCOM cost per customer-hour of outage avoided", "accent"),
     ])
     st.plotly_chart(_impact_bar(st.session_state.theme), use_container_width=True,
-                    config={"displaylogo": False, "displayModeBar": False})
+                    theme=None, config={"displaylogo": False, "displayModeBar": False})
     st.markdown("#### At 1,000 protected transformers")
     _stat_tiles([
         ("2.4-3.6 million", "customer-hours of outage avoided every summer", "ok"),
@@ -440,41 +518,74 @@ def _page_team() -> None:
 # ===========================================================================
 # SIMULATOR (sidebar config + tabs)
 # ===========================================================================
-def _sidebar_scenario(sb) -> tuple[Config, bool]:
-    sb.markdown("#### Scenario")
-    mode_label = sb.selectbox("Controller mode", [m.label for m in ControllerMode], index=0,
-                              help="Sets only the mode shown first on the Simulation tab; that tab's own Mode "
-                                   "selector overrides it, and Monte Carlo and Results always compare all three.")
-    mode = {m.label: m for m in ControllerMode}[mode_label]
-    sb.markdown("###### Population")
-    homes = sb.number_input("Homes on the transformer", 50, 500, 200, 10)
-    ac = sb.slider("AC penetration (%)", 0, 100, 60)
-    vuln = sb.slider("Registered-vulnerable homes (%)", 0, 30, 8)
-    sb.markdown("###### Transformer and fuse")
-    nameplate = sb.number_input("Nameplate rating (kVA)", 50.0, 400.0, 160.0, 10.0)
-    tightness = sb.slider("Fuse rating (x rated current)", 0.80, 1.40, 1.00, 0.05,
-                          help="1.0 = a tight fuse rated at the transformer's own rated current.")
-    rated_i = (nameplate * 1000.0 / 3.0) / 240.0
-    sb.caption(f"Fuse: {tightness * rated_i:.0f} A/phase (rated current {rated_i:.0f} A/phase)")
-    sb.markdown("###### Event and weather")
-    outage = sb.slider("Outage duration (min)", 0, 360, 120, 10)
-    preset_label = sb.selectbox("Ambient", ["Hot (42 C)", "Mild (34 C)", "Heatwave (46 C)", "Custom"], index=0)
-    custom_peak = None
-    heatwave = HeatwavePreset.HOT
-    if preset_label.startswith("Mild"):
-        heatwave = HeatwavePreset.MILD
-    elif preset_label.startswith("Heatwave"):
-        heatwave = HeatwavePreset.HEATWAVE
-    elif preset_label.startswith("Custom"):
-        custom_peak = float(sb.slider("Peak ambient (C)", 28, 48, 42))
-    sb.markdown("###### Monte Carlo")
-    runs = sb.slider("Trials per mode", 10, 500, 200, 10)
-    seed = sb.number_input("Random seed", 0, 1_000_000, 7, 1)
+def _scenario_desc(config: Config) -> str:
+    amb = config.peak_ambient_c
+    return (f"{config.homes} homes, {config.nameplate_kva:.0f} kVA, fuse x{config.fuse_tightness:.2f}, "
+            f"AC {config.ac_penetration*100:.0f}%, outage {config.outage_minutes} min, {amb:.0f} C")
 
-    config = Config(mode=mode, homes=int(homes), ac_penetration=ac / 100.0,
-                    vulnerable_fraction=vuln / 100.0, nameplate_kva=float(nameplate),
-                    fuse_tightness=float(tightness), outage_minutes=int(outage), heatwave=heatwave,
-                    ambient_peak_c=custom_peak, mc_runs=int(runs), seed=int(seed))
+
+def _build_config_from_state() -> tuple[Config, HeatwavePreset, float | None]:
+    ss = st.session_state
+    heatwave, custom_peak = HeatwavePreset.HOT, None
+    amb = ss.sc_ambient
+    if amb.startswith("Mild"):
+        heatwave = HeatwavePreset.MILD
+    elif amb.startswith("Heatwave"):
+        heatwave = HeatwavePreset.HEATWAVE
+    elif amb.startswith("Custom"):
+        custom_peak = float(ss.sc_custom)
+    mode = {m.label: m for m in ControllerMode}[ss.sc_mode]
+    config = Config(
+        mode=mode, homes=int(ss.sc_homes), ac_penetration=ss.sc_ac / 100.0,
+        inverter_ac_share=ss.sc_invshare / 100.0, charger_penetration=ss.sc_charger / 100.0,
+        erickshaw_penetration=ss.sc_erick / 100.0, pump_penetration=ss.sc_pump / 100.0,
+        vulnerable_fraction=ss.sc_vuln / 100.0, base_load_kw_per_home=float(ss.sc_baseload),
+        fault_probability=ss.sc_faultprob / 100.0, nameplate_kva=float(ss.sc_nameplate),
+        fuse_tightness=float(ss.sc_tight), outage_minutes=int(ss.sc_outage), heatwave=heatwave,
+        ambient_peak_c=custom_peak, mc_runs=int(ss.sc_runs), seed=int(ss.sc_seed))
+    return config, heatwave, custom_peak
+
+
+def _sidebar_scenario(sb) -> tuple[Config, bool]:
+    ss = st.session_state
+    sb.markdown("### Scenario presets")
+    pcols = sb.columns(2)
+    for i, name in enumerate(PRESETS):
+        if pcols[i % 2].button(name, key=f"preset_{i}", use_container_width=True):
+            _apply_preset(name)
+            st.rerun()
+
+    sb.markdown("### Scenario")
+    sb.selectbox("Controller mode", [m.label for m in ControllerMode], key="sc_mode",
+                 help="The mode shown first on single-trial views; every view still compares all three.")
+    sb.markdown("###### Population")
+    sb.number_input("Homes on the transformer", 50, 500, step=10, key="sc_homes")
+    sb.slider("AC penetration (%)", 0, 100, key="sc_ac")
+    sb.slider("Registered-vulnerable homes (%)", 0, 30, key="sc_vuln")
+    sb.markdown("###### Transformer and fuse")
+    sb.number_input("Nameplate rating (kVA)", 50.0, 400.0, step=10.0, key="sc_nameplate")
+    sb.slider("Fuse rating (x rated current)", 0.80, 1.40, step=0.05, key="sc_tight",
+              help="1.0 = a tight fuse rated at the transformer's own rated current.")
+    rated_i = (ss.sc_nameplate * 1000.0 / 3.0) / 240.0
+    sb.caption(f"Fuse: {ss.sc_tight * rated_i:.0f} A/phase (rated current {rated_i:.0f} A/phase)")
+    sb.markdown("###### Event and weather")
+    sb.slider("Outage duration (min)", 0, 360, step=10, key="sc_outage")
+    sb.selectbox("Ambient", ["Hot (42 C)", "Mild (34 C)", "Heatwave (46 C)", "Custom"], key="sc_ambient")
+    if ss.sc_ambient.startswith("Custom"):
+        sb.slider("Peak ambient (C)", 28, 48, key="sc_custom")
+    with sb.expander("Advanced parameters"):
+        st.slider("Inverter-AC share of ACs (%)", 0, 100, key="sc_invshare")
+        st.slider("Inverter-charger penetration (%)", 0, 100, key="sc_charger")
+        st.slider("E-rickshaw penetration (%)", 0, 100, key="sc_erick")
+        st.slider("Water-pump penetration (%)", 0, 100, key="sc_pump")
+        st.slider("Base load per home (kW)", 0.05, 0.50, step=0.01, key="sc_baseload")
+        st.slider("Device fault probability (%)", 0, 20, key="sc_faultprob",
+                  help="Faulted devices fall back to pass-through, as if PACER were absent.")
+    sb.markdown("###### Monte Carlo")
+    sb.slider("Trials per mode", 10, 500, step=10, key="sc_runs")
+    sb.number_input("Random seed", 0, 1_000_000, step=1, key="sc_seed")
+
+    config, _, _ = _build_config_from_state()
     problems = config.validate()
     if problems:
         for p in problems:
@@ -483,18 +594,20 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         sb.markdown(f'<span class="pacer-chip ok">configuration valid</span> '
                     f'<span class="pacer-chip accent">deterministic &middot; seed {config.seed}</span>',
                     unsafe_allow_html=True)
-    run_clicked = sb.button("Run analysis", type="primary", use_container_width=True, disabled=bool(problems))
-    sb.markdown("---")
+    run_clicked = sb.button("Run simulation", type="primary", use_container_width=True, disabled=bool(problems))
     if not st.session_state.confirm_reset:
         if sb.button("Reset results", use_container_width=True):
             st.session_state.confirm_reset = True
             st.rerun()
     else:
-        sb.warning("Clear the current run and cached results?")
+        sb.warning("Clear the current run and caches?")
         cc1, cc2 = sb.columns(2)
         if cc1.button("Confirm", use_container_width=True):
             st.session_state.active = None
+            st.session_state.sweep = None
             _compute_trial.clear()
+            _compute_modes.clear()
+            _compute_structure.clear()
             st.session_state.confirm_reset = False
             st.rerun()
         if cc2.button("Cancel", use_container_width=True):
@@ -519,7 +632,18 @@ def _do_run(config: Config) -> None:
 
         mc = run_monte_carlo(config, progress=cb)
     holder.empty()
-    st.session_state.active = {"key": config.key(), "config": config, "mc": mc, "ts": _dt.datetime.now()}
+    structure = _compute_structure(config)
+    st.session_state.active = {"key": config.key(), "config": config, "mc": mc,
+                               "structure": structure, "ts": _dt.datetime.now()}
+    st.session_state.sim_trial = 0
+    st.session_state.sweep = None
+    rec = {"Time": _dt.datetime.now().strftime("%H:%M:%S"), "Config": _config_hash(config),
+           "Seed": config.seed, "Runs": config.mc_runs, "Scenario": _scenario_desc(config)}
+    for m in mc.modes:
+        s = mc.stats[m]
+        rec[m.label] = f"{s.blowout_runs}/{s.n_runs}"
+    st.session_state.ledger.insert(0, rec)
+    st.session_state.ledger = st.session_state.ledger[:30]
 
 
 def _chart_config() -> dict:
@@ -619,12 +743,12 @@ def _tab_simulation(active, theme):
     m4.metric("Weakest voltage", f"{np.min(tr.min_voltage[tr.restore_minute:]):.0f} V")
     m5.metric("Blow-out at", f"{tr.blow_minute_since_restore} min" if tr.blew else "--")
     r1c1, r1c2 = st.columns(2)
-    r1c1.plotly_chart(_fig_load(tr, config, theme), use_container_width=True, config=_chart_config())
-    r1c2.plotly_chart(_fig_fuse(tr, config, theme), use_container_width=True, config=_chart_config())
+    r1c1.plotly_chart(_fig_load(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
+    r1c2.plotly_chart(_fig_fuse(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
     r2c1, r2c2 = st.columns(2)
-    r2c1.plotly_chart(_fig_hotspot(tr, config, theme), use_container_width=True, config=_chart_config())
-    r2c2.plotly_chart(_fig_voltage(tr, config, theme), use_container_width=True, config=_chart_config())
-    st.plotly_chart(_fig_online(tr, config, theme), use_container_width=True, config=_chart_config())
+    r2c1.plotly_chart(_fig_hotspot(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
+    r2c2.plotly_chart(_fig_voltage(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
+    st.plotly_chart(_fig_online(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
     _back_to_top()
 
 
@@ -647,21 +771,21 @@ def _tab_montecarlo(active, theme):
                                       arrayminus=[r - l for l, r in zip(lo, rates)], color=sem["muted"], thickness=1),
                          width=0.5))
     fig.update_layout(title="Blow-out rate with 95% confidence interval", yaxis_title="% of runs", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, config=_chart_config())
+    st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
     d1, d2 = st.columns(2)
     with d1:
         fig = themed_figure(theme, height=320)
         for m in mc.modes:
             fig.add_trace(go.Box(y=mc.stats[m].homes_dark, name=m.label, marker_color=sev[m], boxpoints=False, line=dict(width=1.2)))
         fig.update_layout(title="Homes dark per restoration", yaxis_title="homes", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, config=_chart_config())
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
     with d2:
         fig = themed_figure(theme, height=320)
         for m in mc.modes:
             fig.add_trace(go.Box(y=mc.stats[m].peak_pu, name=m.label, marker_color=sev[m], boxpoints=False, line=dict(width=1.2)))
         fig.add_hline(y=1.0, line=dict(color=sem["muted"], width=1, dash="dot"))
         fig.update_layout(title="Peak load vs rating", yaxis_title="x rating", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, config=_chart_config())
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
     _back_to_top()
 
 
@@ -773,8 +897,396 @@ def _tab_methodology(theme):
 # ===========================================================================
 # MAIN
 # ===========================================================================
-_SIM_AREA = "Simulator"
-_AREAS = ["Overview", "Problem & solution", _SIM_AREA, "Impact & case", "Delivery", "Team & about"]
+# ===========================================================================
+# SIMULATOR -- nine-view instrument panel
+# ===========================================================================
+_KPI_KIND = {"baseline": "danger", "pacer": "caution", "pacer_beacon": "ok"}
+_FUSE_MELT_PU = 1.45  # fusing factor: per-phase load (vs rating) that melts a tight fuse
+
+
+def _mode_trials(config: Config) -> dict[str, TrialResult]:
+    return _compute_modes(config, int(st.session_state.sim_trial))
+
+
+def _overlay(theme, trials, gety, title, ytitle, height=320, hlines=None):
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    ref = trials["baseline"]
+    t = _time_axis(ref)
+    fig = themed_figure(theme, height=height)
+    for mv in _MODE_ORDER:
+        fig.add_trace(go.Scatter(x=t, y=gety(trials[mv]), mode="lines", name=_MODE_LABEL[mv],
+                                 line=dict(color=mcl[mv], width=1.8)))
+    for (y, lab, col) in (hlines or []):
+        fig.add_hline(y=y, line=dict(color=col, width=1, dash="dot"), annotation_text=lab,
+                      annotation_position="top left", annotation_font=dict(color=col, size=10))
+    x0 = ref.outage_start - ref.restore_minute
+    fig.add_vrect(x0=x0, x1=0, fillcolor=sem["outage"], line_width=0, layer="below")
+    fig.add_vline(x=0, line=dict(color=sem["muted"], width=1, dash="dot"))
+    fig.update_layout(title=title, yaxis_title=ytitle, xaxis_title="minutes from restoration")
+    return fig
+
+
+def _blowbar(mc, theme, height=300):
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    labels = [_MODE_LABEL[mv] for mv in _MODE_ORDER]
+    rates, lo, hi = [], [], []
+    for mv in _MODE_ORDER:
+        s = mc.stats[ControllerMode(mv)]
+        rates.append(s.blowout_runs / s.n_runs * 100)
+        lo.append(s.blowout_ci.low * 100)
+        hi.append(s.blowout_ci.high * 100)
+    fig = themed_figure(theme, height=height)
+    fig.add_trace(go.Bar(x=labels, y=rates, marker_color=[mcl[mv] for mv in _MODE_ORDER], width=0.5,
+                         error_y=dict(type="data", symmetric=False, array=[h - r for h, r in zip(hi, rates)],
+                                      arrayminus=[r - l for l, r in zip(lo, rates)], color=sem["muted"], thickness=1)))
+    fig.update_layout(title="Fuse blow-out rate (95% CI)", yaxis_title="% of runs", showlegend=False)
+    return fig
+
+
+def _mode_bar(theme, valuef, title, ytitle, height=300):
+    mcl = _mode_colors(theme)
+    labels = [_MODE_LABEL[mv] for mv in _MODE_ORDER]
+    fig = themed_figure(theme, height=height)
+    fig.add_trace(go.Bar(x=labels, y=[valuef(mv) for mv in _MODE_ORDER],
+                         marker_color=[mcl[mv] for mv in _MODE_ORDER], width=0.5))
+    fig.update_layout(title=title, yaxis_title=ytitle, showlegend=False)
+    return fig
+
+
+def _sim_overview(active, theme):
+    mc = active["mc"]
+    config = active["config"]
+    _kicker("Command centre - one scenario, three controllers, head to head")
+    _stat_tiles([(f"{mc.stats[ControllerMode(mv)].blowout_runs / mc.stats[ControllerMode(mv)].n_runs * 100:.1f}%",
+                  f"{_MODE_LABEL[mv]} fuse blow-outs ({mc.stats[ControllerMode(mv)].blowout_runs}/{mc.n_runs})",
+                  _KPI_KIND[mv]) for mv in _MODE_ORDER])
+    b = mc.stats[ControllerMode.BASELINE]
+    be = mc.stats[ControllerMode.PACER_BEACON]
+    _stat_tiles([
+        (f"{b.mean_homes_dark - be.mean_homes_dark:.0f}", "homes kept online per restoration (Baseline - Beacon)", "ok"),
+        (f"{b.mean_peak_pu:.2f}x -> {be.mean_peak_pu:.2f}x", "peak load, Baseline -> Beacon", "ok"),
+        (f"{mc.n_runs}", "Monte Carlo trials per mode", "accent"),
+    ])
+    c1, c2 = st.columns([5, 6])
+    with c1:
+        st.plotly_chart(_blowbar(mc, theme), use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        trials = _mode_trials(config)
+        sem = semantic(theme)
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.phase_load_pu.max(axis=1),
+                                 "Worst-phase load, one restoration", "x rating",
+                                 hlines=[(1.0, "rating", sem["muted"]), (_FUSE_MELT_PU, "fuse melts", sem["danger"])]),
+                        use_container_width=True, theme=None, config=_chart_config())
+    st.caption("Baseline restarts in lockstep (~2x). PACER staggers and softens the surge; the Beacon adds a "
+               "per-phase fuse ceiling. Every view below dissects the same scenario.")
+    _back_to_top()
+
+
+def _sim_structure(active, theme):
+    s = active["structure"]
+    sem = semantic(theme)
+    _kicker("Structure - the network this run simulates")
+    _stat_tiles([
+        (f"{s['n_homes']}", "homes on the transformer", "accent"),
+        (f"{s['n_devices']}", "controllable devices", "accent"),
+        (f"{s['n_ac_homes']}", "air-conditioned homes", "accent"),
+        (f"{s['n_vulnerable']}", "registered-vulnerable homes", "caution"),
+    ])
+    _svg(diagrams.feeder_topology())
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = themed_figure(theme, height=300)
+        fig.add_trace(go.Bar(x=s["appliance_labels"], y=s["kind_counts"], marker_color=sem["accent"]))
+        fig.update_layout(title="Device population by type", yaxis_title="count", showlegend=False)
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        ph = [f"Phase {chr(65 + i)}" for i in range(len(s["homes_per_phase"]))]
+        fig = themed_figure(theme, height=300)
+        fig.add_trace(go.Bar(x=ph, y=s["homes_per_phase"], name="homes", marker_color=sem["muted"]))
+        fig.add_trace(go.Bar(x=ph, y=s["connected_kw_per_phase"], name="connected kW",
+                             marker_color=sem["accent"], yaxis="y2"))
+        fig.update_layout(title="Per-phase split (imbalance)", barmode="group", yaxis_title="homes",
+                          yaxis2=dict(title="kW", overlaying="y", side="right", showgrid=False))
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    st.caption(f"Connected load {s['total_connected_kw']:.0f} kW across {s['n_devices']} devices. Per-phase rated "
+               f"current {s['rated_phase_current_a']:.0f} A; fuse {s['fuse_current_a']:.0f} A/phase. The worst phase "
+               "carries more than the others -- the imbalance the Beacon targets.")
+    _back_to_top()
+
+
+def _sim_environment(active, theme):
+    config = active["config"]
+    mc = active["mc"]
+    trials = _mode_trials(config)
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    ref = trials["baseline"]
+    _kicker("Environment - heat, rooms and transformer thermals")
+    c1, c2 = st.columns(2)
+    with c1:
+        t = _time_axis(ref)
+        fig = themed_figure(theme, height=320)
+        fig.add_trace(go.Scatter(x=t, y=ref.ambient_c, name="Ambient", line=dict(color=sem["muted"], width=1.4, dash="dot")))
+        for mv in _MODE_ORDER:
+            fig.add_trace(go.Scatter(x=t, y=trials[mv].mean_indoor_c, name=_MODE_LABEL[mv], line=dict(color=mcl[mv], width=1.6)))
+        fig.add_hline(y=32, line=dict(color=sem["danger"], width=1, dash="dot"), annotation_text="32 C heat line",
+                      annotation_position="top left", annotation_font=dict(color=sem["danger"], size=10))
+        x0 = ref.outage_start - ref.restore_minute
+        fig.add_vrect(x0=x0, x1=0, fillcolor=sem["outage"], line_width=0, layer="below")
+        fig.add_vline(x=0, line=dict(color=sem["muted"], width=1, dash="dot"))
+        fig.update_layout(title="Mean indoor temperature", yaxis_title="C", xaxis_title="minutes from restoration")
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.hot_spot_c, "Transformer hot-spot (IEC 60076-7)", "C",
+                                 hlines=[(98, "98 C rated", sem["caution"])]), use_container_width=True, theme=None, config=_chart_config())
+    c3, c4 = st.columns(2)
+    with c3:
+        st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_minutes_above_32,
+                                  "Minutes above 32 C per AC home", "minutes"), use_container_width=True, theme=None, config=_chart_config())
+    with c4:
+        st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_ageing_hours,
+                                  "Insulation ageing per restoration", "equivalent hours"), use_container_width=True, theme=None, config=_chart_config())
+    st.caption("A hot room drives Rule 7: a cooling floor that always wins, so overheated homes reach full power "
+               "within ~25 minutes even while the controller paces the rest.")
+    _back_to_top()
+
+
+def _sim_sensing(active, theme):
+    config = active["config"]
+    trials = _mode_trials(config)
+    sem = semantic(theme)
+    pac = trials["pacer"]
+    _kicker("Sensing - Rule 4: grid stress from voltage, relative to a learned normal")
+    _stat_tiles([
+        (f"{pac.learned_normal_v_mean:.0f} V", "learned normal voltage (per time-of-day)", "accent"),
+        (f"{pac.z_estimate_median * 1000:.0f} m-ohm", "median self-measured line impedance", "accent"),
+        (f"{pac.stress_signal.max():.0f} A", "peak sensed stress (PACER)", "caution"),
+    ])
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.rep_voltage, "Representative home voltage", "V (L-N)",
+                                 hlines=[(config.v_ln, "nominal", sem["muted"])]), use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.stress_signal,
+                                 "Stress the controller senses", "A (impedance-normalised)"),
+                        use_container_width=True, theme=None, config=_chart_config())
+    st.plotly_chart(_overlay(theme, trials, lambda tr: tr.min_voltage, "Weakest-home voltage (worst sag)", "V (L-N)",
+                             hlines=[(config.v_ln, "nominal", sem["muted"]), (config.v_ln * 0.9, "-10%", sem["caution"])]),
+                    use_container_width=True, theme=None, config=_chart_config())
+    st.caption("Baseline has no sensing (flat). PACER turns the voltage sag into an impedance-normalised stress, so "
+               "it works on weak feeders sagging to ~190 V, and backs off when stress runs high.")
+    _back_to_top()
+
+
+def _sim_detection(active, theme):
+    config = active["config"]
+    trials = _mode_trials(config)
+    sem = semantic(theme)
+    cols = phase_colors(theme)
+    _kicker("Detection - per-phase fuse heating and the blow-out")
+    st.plotly_chart(_overlay(theme, trials, lambda tr: tr.phase_heat_pct.max(axis=1),
+                             "Worst-phase fuse-heat, three controllers", "% of melting",
+                             hlines=[(100, "melt", sem["danger"]), (72, "beacon ceiling (85% level)", sem["caution"])]),
+                    use_container_width=True, theme=None, config=_chart_config())
+    sel = st.selectbox("Per-phase detail for mode", [_MODE_LABEL[mv] for mv in _MODE_ORDER], key="det_mode")
+    mv = {v: k for k, v in _MODE_LABEL.items()}[sel]
+    tr = trials[mv]
+    t = _time_axis(tr)
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = themed_figure(theme, height=300)
+        for ph in range(config.phases):
+            fig.add_trace(go.Scatter(x=t, y=tr.phase_heat_pct[:, ph], name=f"Phase {chr(65 + ph)}", line=dict(color=cols[ph], width=1.4)))
+        fig.add_hline(y=100, line=dict(color=sem["danger"], width=1, dash="dash"))
+        _add_event_markers(fig, tr, theme)
+        fig.update_layout(title=f"Per-phase fuse-heat ({sel})", yaxis_title="% of melting", xaxis_title="minutes from restoration")
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        fig = themed_figure(theme, height=300)
+        for ph in range(config.phases):
+            fig.add_trace(go.Scatter(x=t, y=tr.phase_load_pu[:, ph], name=f"Phase {chr(65 + ph)}", line=dict(color=cols[ph], width=1.4)))
+        fig.add_hline(y=_FUSE_MELT_PU, line=dict(color=sem["danger"], width=1, dash="dot"), annotation_text="fuse melts",
+                      annotation_position="top left", annotation_font=dict(color=sem["danger"], size=10))
+        _add_event_markers(fig, tr, theme, mark_blow=False)
+        fig.update_layout(title=f"Per-phase load ({sel})", yaxis_title="x rating", xaxis_title="minutes from restoration")
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    chips = []
+    for mvv in _MODE_ORDER:
+        tt = trials[mvv]
+        state = f"blow at {tt.blow_minute_since_restore} min" if tt.blew else "held"
+        chips.append(f'<span class="pacer-chip {"danger" if tt.blew else "ok"}">{_MODE_LABEL[mvv]}: {state}</span>')
+    st.markdown(" ".join(chips), unsafe_allow_html=True)
+    _back_to_top()
+
+
+def _sim_assimilation(active, theme):
+    mc = active["mc"]
+    config = active["config"]
+    mcl = _mode_colors(theme)
+    _kicker(f"Assimilation - aggregating {mc.n_runs} randomised trials per mode, and sweeping conditions")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(_blowbar(mc, theme, height=320), use_container_width=True, theme=None, config=_chart_config())
+    with c2:
+        fig = themed_figure(theme, height=320)
+        for mv in _MODE_ORDER:
+            fig.add_trace(go.Box(y=mc.stats[ControllerMode(mv)].homes_dark, name=_MODE_LABEL[mv],
+                                 marker_color=mcl[mv], boxpoints=False, line=dict(width=1.2)))
+        fig.update_layout(title="Homes dark per restoration", yaxis_title="homes", showlegend=False)
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    st.markdown("###### Statistical tests (two-proportion, blow-out rate)")
+    for tt in mc.pairwise_tests:
+        verdict = "significant" if tt.p_value < 0.05 else "not significant at 0.05"
+        st.markdown(f'<span class="pacer-mono">{tt.label_a} vs {tt.label_b}: {tt.prop_a*100:.1f}% vs '
+                    f'{tt.prop_b*100:.1f}%, z = {tt.z:+.2f}, p = {tt.p_value:.3g}</span> &mdash; {verdict}',
+                    unsafe_allow_html=True)
+    st.markdown("#### Sensitivity sweep")
+    sc1, sc2 = st.columns([3, 1])
+    var_label = sc1.selectbox("Sweep variable", list(SWEEP_VARIABLES.keys()), key="sweep_var")
+    if sc2.button("Run sweep", use_container_width=True):
+        from dataclasses import replace
+        field = SWEEP_VARIABLES[var_label]
+        values = SWEEP_RANGES[field]
+        base = replace(config, mc_runs=min(config.mc_runs, 40))
+        holder = st.empty()
+        with holder.container():
+            st.markdown(f"Sweeping {var_label}: {len(values)} points x 3 modes x {base.mc_runs} runs...")
+            bar = st.progress(0.0, text="Starting")
+            last = {"b": -1}
+
+            def cb(frac, msg):
+                fr = min(max(frac, 0.0), 1.0)
+                bk = int(fr * 100)
+                if bk != last["b"]:
+                    last["b"] = bk
+                    bar.progress(fr, text=msg)
+
+            sweep = run_sweep(base, field, values, progress=cb)
+        holder.empty()
+        st.session_state.sweep = {"var_label": var_label, "sweep": sweep}
+    sw = st.session_state.sweep
+    if sw and sw["var_label"] == var_label:
+        sweep = sw["sweep"]
+        fig = themed_figure(theme, height=340)
+        for mv in _MODE_ORDER:
+            m = ControllerMode(mv)
+            fig.add_trace(go.Scatter(x=sweep.values, y=sweep.rate_pct[m], mode="lines+markers",
+                                     name=_MODE_LABEL[mv], line=dict(color=mcl[mv], width=1.9), marker=dict(size=6)))
+        fig.update_layout(title=f"Blow-out rate vs {var_label}  ({sweep.n_runs} runs/point)",
+                          xaxis_title=var_label, yaxis_title="% of runs")
+        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    else:
+        st.caption("Pick a variable and press Run sweep to trace how blow-outs respond as it changes, holding "
+                   "everything else fixed -- a clean, un-rigged sensitivity curve.")
+    _back_to_top()
+
+
+def _sim_economics(active, theme):
+    mc = active["mc"]
+    config = active["config"]
+    _kicker("Economics - translating THIS run into customer-hours, carbon and payback")
+    ec = st.columns(3)
+    restorations = ec[0].slider("Restorations per summer", 10, 80, 40, key="eco_rest")
+    repair_h = ec[1].slider("Repair hours per blow-out", 1, 8, 3, key="eco_repair")
+    counted = ec[2].slider("Fraction of benefit counted (%)", 20, 100, 40, key="eco_counted") / 100.0
+    base = mc.stats[ControllerMode.BASELINE]
+
+    def ch_avoided(mode):
+        s = mc.stats[mode]
+        base_ch = restorations * (base.blowout_runs / base.n_runs) * base.mean_homes_dark * repair_h
+        mode_ch = restorations * (s.blowout_runs / s.n_runs) * s.mean_homes_dark * repair_h
+        return max(0.0, base_ch - mode_ch) * counted
+
+    pacer_ch = ch_avoided(ControllerMode.PACER)
+    beacon_ch = ch_avoided(ControllerMode.PACER_BEACON)
+    _stat_tiles([
+        (f"{beacon_ch:,.0f}", "customer-hours of outage avoided / transformer / summer (PACER+Beacon)", "ok"),
+        (f"{pacer_ch:,.0f}", "customer-hours avoided with PACER only", "ok"),
+        (f"{beacon_ch / max(config.homes, 1):.1f} h", "per household per summer", "ok"),
+    ])
+    mcl = _mode_colors(theme)
+    fig = themed_figure(theme, height=300)
+    fig.add_trace(go.Bar(x=[_MODE_LABEL["pacer"], _MODE_LABEL["pacer_beacon"]], y=[pacer_ch, beacon_ch],
+                         marker_color=[mcl["pacer"], mcl["pacer_beacon"]], width=0.5))
+    fig.update_layout(title="Customer-hours of outage avoided per summer", yaxis_title="customer-hours", showlegend=False)
+    st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    st.markdown("#### Programme economics (project estimates)")
+    _stat_tiles([
+        ("Rs 1.6-3.1 lakh", "per transformer capex + Rs 4,500-10,000 / yr", "accent"),
+        ("9 mo - 5.5 yr", "DISCOM payback (central 1.8 yr); Rs 7-20 / customer-hour", "accent"),
+        ("0.35-1.5 t", "CO2e avoided / transformer / yr", "ok"),
+    ])
+    st.caption("The live tiles are computed from THIS run's blow-out rates and homes-dark, scaled by your "
+               "assumptions (it treats every restoration as this scenario; the deck's fleet average mixes "
+               "severities). The programme economics are the project's published estimates.")
+    _back_to_top()
+
+
+def _sim_ledger(theme):
+    _kicker("Ledger - every run this session, for side-by-side comparison")
+    led = st.session_state.ledger
+    if not led:
+        st.info("Run a simulation to start the ledger.")
+        _back_to_top()
+        return
+    df = pd.DataFrame(led)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    lc1, lc2 = st.columns([1, 4])
+    lc1.download_button("Download CSV", df.to_csv(index=False).encode(), file_name="pacer_ledger.csv", mime="text/csv")
+    if lc2.button("Clear ledger"):
+        st.session_state.ledger = []
+        st.rerun()
+    st.caption("Each run is logged with its config hash and seed, so any row here reproduces byte-for-byte.")
+    _back_to_top()
+
+
+def _sim_provenance(active, theme):
+    config = active["config"]
+    mc = active["mc"]
+    _kicker("Provenance - reproducibility, standards and the honest record")
+    _stat_tiles([
+        (f"{config.seed}", "random seed", "accent"),
+        (f"{_config_hash(config)}", "configuration hash", "accent"),
+        (f"{mc.n_runs}", "trials per mode", "accent"),
+    ])
+    st.markdown('<span class="pacer-chip accent">deterministic</span> '
+                '<span class="pacer-chip ok">byte-identical on re-run</span> '
+                '<span class="pacer-chip">golden-regression tested</span>', unsafe_allow_html=True)
+    st.markdown("Same seed + same configuration reproduce every figure in this app byte-for-byte; a committed "
+                "golden fixture and test enforce it.")
+    df = _headline_dataframe(mc)
+    st.markdown("###### Headline comparison (live engine)")
+    st.table(df)
+    with st.expander("Project deck -- published scenario matrix (reference)"):
+        deck = pd.DataFrame(DECK_SCENARIOS, columns=["Scenario", "Today", "PACER", "PACER + Beacon"])
+        st.table(deck)
+        st.caption("The deck's published figures. This app's live engine matches the baseline exactly and gives "
+                   "PACER / PACER+Beacon in the same order; it does not reproduce the Beacon reaching <=1 "
+                   "(reported honestly). The 200/25/1 were a sanity check, never a fit target.")
+    pc1, pc2 = st.columns(2)
+    with pc1:
+        st.caption("Results (Markdown) -- copy button")
+        st.code(_df_to_markdown(df), language="markdown")
+        st.download_button("Download CSV", df.to_csv(index=False).encode(),
+                           file_name=f"pacer_results_seed{config.seed}.csv", mime="text/csv")
+    with pc2:
+        st.caption("Configuration -- copy button")
+        st.code(_config_text(config), language="text")
+    _tab_methodology(theme)
+    _back_to_top()
+
+
+# ===========================================================================
+# MAIN
+# ===========================================================================
+_AREAS = ["Simulator", "Overview", "Problem & solution", "Impact & case", "Delivery", "Team & about"]
+_SIM_VIEWS = [
+    ("Overview", _sim_overview), ("Structure", _sim_structure), ("Environment", _sim_environment),
+    ("Sensing", _sim_sensing), ("Detection", _sim_detection), ("Assimilation", _sim_assimilation),
+    ("Economics", _sim_economics), ("Ledger", None), ("Provenance", _sim_provenance),
+]
 
 
 def main() -> None:
@@ -784,11 +1296,11 @@ def main() -> None:
 
     sb = st.sidebar
     sb.markdown("### Navigate")
-    area = sb.radio("Section", _AREAS, label_visibility="collapsed")
+    area = sb.radio("Section", _AREAS, key="section", label_visibility="collapsed")
     sb.markdown("---")
 
     run_clicked = False
-    if area == _SIM_AREA:
+    if area == "Simulator":
         config, run_clicked = _sidebar_scenario(sb)
     else:
         config = st.session_state.active["config"] if st.session_state.active else Config()
@@ -800,7 +1312,21 @@ def main() -> None:
         _do_run(config)
     active = st.session_state.active
 
-    if area == "Overview":
+    if area == "Simulator":
+        tc1, tc2 = st.columns([1, 3], vertical_alignment="bottom")
+        tc1.number_input("Representative trial (scenario)", 0, 999, key="sim_trial")
+        if active is not None and active["key"] != config.key():
+            tc2.warning("Scenario changed since the last run -- press Run simulation to refresh.")
+        tabs = st.tabs([name for name, _ in _SIM_VIEWS])
+        for i, (name, fn) in enumerate(_SIM_VIEWS):
+            with tabs[i]:
+                if name == "Ledger":
+                    _sim_ledger(theme)
+                elif active is None:
+                    st.info("Set up a scenario in the sidebar (or pick a preset) and press Run simulation.")
+                else:
+                    fn(active, theme)
+    elif area == "Overview":
         _page_overview()
     elif area == "Problem & solution":
         tabs = st.tabs(["The problem", "The solution", "How it works", "Architecture & hardware"])
@@ -812,16 +1338,6 @@ def main() -> None:
             _page_how_it_works()
         with tabs[3]:
             _page_architecture()
-    elif area == _SIM_AREA:
-        if active is not None and active["key"] != config.key():
-            st.warning("The scenario has changed since the last run. Press Run analysis to update the results below.")
-        tabs = st.tabs(["Simulation", "Monte Carlo", "Results and verification"])
-        for i, fn in enumerate((_tab_simulation, _tab_montecarlo, _tab_results)):
-            with tabs[i]:
-                if active is None:
-                    st.info("Configure the scenario in the sidebar and press Run analysis.")
-                else:
-                    fn(active, theme)
     elif area == "Impact & case":
         tabs = st.tabs(["Impact & assessment", "Innovation & IP", "Challenge alignment"])
         with tabs[0]:
