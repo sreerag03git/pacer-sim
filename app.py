@@ -194,7 +194,7 @@ def _render_header(config: Config, theme: str) -> None:
                 f'<br>build {BUILD_DATE} &middot; v{APP_VERSION}</div>', unsafe_allow_html=True)
         with c3:
             label = "Switch to dark" if theme == "light" else "Switch to light"
-            st.button(label, on_click=_toggle_theme, use_container_width=True, key="theme_btn")
+            st.button(label, on_click=_toggle_theme, width='stretch', key="theme_btn")
 
 
 def _footer(active: dict | None) -> None:
@@ -379,7 +379,7 @@ def _page_impact() -> None:
         ("0.35-1.5 t", "CO2e avoided / transformer / yr (mostly transformers not replaced)", "ok"),
         ("Rs 7-20", "DISCOM cost per customer-hour of outage avoided", "accent"),
     ])
-    st.plotly_chart(_impact_bar(st.session_state.theme), use_container_width=True,
+    st.plotly_chart(_impact_bar(st.session_state.theme), width='stretch',
                     theme=None, config={"displaylogo": False, "displayModeBar": False})
     st.markdown("#### At 1,000 protected transformers")
     _stat_tiles([
@@ -551,7 +551,7 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
     sb.markdown("### Scenario presets")
     pcols = sb.columns(2)
     for i, name in enumerate(PRESETS):
-        if pcols[i % 2].button(name, key=f"preset_{i}", use_container_width=True):
+        if pcols[i % 2].button(name, key=f"preset_{i}", width='stretch'):
             _apply_preset(name)
             st.rerun()
 
@@ -594,15 +594,15 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         sb.markdown(f'<span class="pacer-chip ok">configuration valid</span> '
                     f'<span class="pacer-chip accent">deterministic &middot; seed {config.seed}</span>',
                     unsafe_allow_html=True)
-    run_clicked = sb.button("Run simulation", type="primary", use_container_width=True, disabled=bool(problems))
+    run_clicked = sb.button("Run simulation", type="primary", width='stretch', disabled=bool(problems))
     if not st.session_state.confirm_reset:
-        if sb.button("Reset results", use_container_width=True):
+        if sb.button("Reset results", width='stretch'):
             st.session_state.confirm_reset = True
             st.rerun()
     else:
         sb.warning("Clear the current run and caches?")
         cc1, cc2 = sb.columns(2)
-        if cc1.button("Confirm", use_container_width=True):
+        if cc1.button("Confirm", width='stretch'):
             st.session_state.active = None
             st.session_state.sweep = None
             _compute_trial.clear()
@@ -610,7 +610,7 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
             _compute_structure.clear()
             st.session_state.confirm_reset = False
             st.rerun()
-        if cc2.button("Cancel", use_container_width=True):
+        if cc2.button("Cancel", width='stretch'):
             st.session_state.confirm_reset = False
             st.rerun()
     return config, run_clicked
@@ -743,12 +743,12 @@ def _tab_simulation(active, theme):
     m4.metric("Weakest voltage", f"{np.min(tr.min_voltage[tr.restore_minute:]):.0f} V")
     m5.metric("Blow-out at", f"{tr.blow_minute_since_restore} min" if tr.blew else "--")
     r1c1, r1c2 = st.columns(2)
-    r1c1.plotly_chart(_fig_load(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
-    r1c2.plotly_chart(_fig_fuse(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
+    r1c1.plotly_chart(_fig_load(tr, config, theme), width='stretch', theme=None, config=_chart_config())
+    r1c2.plotly_chart(_fig_fuse(tr, config, theme), width='stretch', theme=None, config=_chart_config())
     r2c1, r2c2 = st.columns(2)
-    r2c1.plotly_chart(_fig_hotspot(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
-    r2c2.plotly_chart(_fig_voltage(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
-    st.plotly_chart(_fig_online(tr, config, theme), use_container_width=True, theme=None, config=_chart_config())
+    r2c1.plotly_chart(_fig_hotspot(tr, config, theme), width='stretch', theme=None, config=_chart_config())
+    r2c2.plotly_chart(_fig_voltage(tr, config, theme), width='stretch', theme=None, config=_chart_config())
+    st.plotly_chart(_fig_online(tr, config, theme), width='stretch', theme=None, config=_chart_config())
     _back_to_top()
 
 
@@ -771,21 +771,21 @@ def _tab_montecarlo(active, theme):
                                       arrayminus=[r - l for l, r in zip(lo, rates)], color=sem["muted"], thickness=1),
                          width=0.5))
     fig.update_layout(title="Blow-out rate with 95% confidence interval", yaxis_title="% of runs", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     d1, d2 = st.columns(2)
     with d1:
         fig = themed_figure(theme, height=320)
         for m in mc.modes:
             fig.add_trace(go.Box(y=mc.stats[m].homes_dark, name=m.label, marker_color=sev[m], boxpoints=False, line=dict(width=1.2)))
         fig.update_layout(title="Homes dark per restoration", yaxis_title="homes", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     with d2:
         fig = themed_figure(theme, height=320)
         for m in mc.modes:
             fig.add_trace(go.Box(y=mc.stats[m].peak_pu, name=m.label, marker_color=sev[m], boxpoints=False, line=dict(width=1.2)))
         fig.add_hline(y=1.0, line=dict(color=sem["muted"], width=1, dash="dot"))
         fig.update_layout(title="Peak load vs rating", yaxis_title="x rating", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     _back_to_top()
 
 
@@ -971,14 +971,14 @@ def _sim_overview(active, theme):
     ])
     c1, c2 = st.columns([5, 6])
     with c1:
-        st.plotly_chart(_blowbar(mc, theme), use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(_blowbar(mc, theme), width='stretch', theme=None, config=_chart_config())
     with c2:
         trials = _mode_trials(config)
         sem = semantic(theme)
         st.plotly_chart(_overlay(theme, trials, lambda tr: tr.phase_load_pu.max(axis=1),
                                  "Worst-phase load, one restoration", "x rating",
                                  hlines=[(1.0, "rating", sem["muted"]), (_FUSE_MELT_PU, "fuse melts", sem["danger"])]),
-                        use_container_width=True, theme=None, config=_chart_config())
+                        width='stretch', theme=None, config=_chart_config())
     st.caption("Baseline restarts in lockstep (~2x). PACER staggers and softens the surge; the Beacon adds a "
                "per-phase fuse ceiling. Every view below dissects the same scenario.")
     _back_to_top()
@@ -1000,7 +1000,7 @@ def _sim_structure(active, theme):
         fig = themed_figure(theme, height=300)
         fig.add_trace(go.Bar(x=s["appliance_labels"], y=s["kind_counts"], marker_color=sem["accent"]))
         fig.update_layout(title="Device population by type", yaxis_title="count", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     with c2:
         ph = [f"Phase {chr(65 + i)}" for i in range(len(s["homes_per_phase"]))]
         fig = themed_figure(theme, height=300)
@@ -1009,7 +1009,7 @@ def _sim_structure(active, theme):
                              marker_color=sem["accent"], yaxis="y2"))
         fig.update_layout(title="Per-phase split (imbalance)", barmode="group", yaxis_title="homes",
                           yaxis2=dict(title="kW", overlaying="y", side="right", showgrid=False))
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     st.caption(f"Connected load {s['total_connected_kw']:.0f} kW across {s['n_devices']} devices. Per-phase rated "
                f"current {s['rated_phase_current_a']:.0f} A; fuse {s['fuse_current_a']:.0f} A/phase. The worst phase "
                "carries more than the others -- the imbalance the Beacon targets.")
@@ -1037,17 +1037,17 @@ def _sim_environment(active, theme):
         fig.add_vrect(x0=x0, x1=0, fillcolor=sem["outage"], line_width=0, layer="below")
         fig.add_vline(x=0, line=dict(color=sem["muted"], width=1, dash="dot"))
         fig.update_layout(title="Mean indoor temperature", yaxis_title="C", xaxis_title="minutes from restoration")
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     with c2:
         st.plotly_chart(_overlay(theme, trials, lambda tr: tr.hot_spot_c, "Transformer hot-spot (IEC 60076-7)", "C",
-                                 hlines=[(98, "98 C rated", sem["caution"])]), use_container_width=True, theme=None, config=_chart_config())
+                                 hlines=[(98, "98 C rated", sem["caution"])]), width='stretch', theme=None, config=_chart_config())
     c3, c4 = st.columns(2)
     with c3:
         st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_minutes_above_32,
-                                  "Minutes above 32 C per AC home", "minutes"), use_container_width=True, theme=None, config=_chart_config())
+                                  "Minutes above 32 C per AC home", "minutes"), width='stretch', theme=None, config=_chart_config())
     with c4:
         st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_ageing_hours,
-                                  "Insulation ageing per restoration", "equivalent hours"), use_container_width=True, theme=None, config=_chart_config())
+                                  "Insulation ageing per restoration", "equivalent hours"), width='stretch', theme=None, config=_chart_config())
     st.caption("A hot room drives Rule 7: a cooling floor that always wins, so overheated homes reach full power "
                "within ~25 minutes even while the controller paces the rest.")
     _back_to_top()
@@ -1067,14 +1067,14 @@ def _sim_sensing(active, theme):
     c1, c2 = st.columns(2)
     with c1:
         st.plotly_chart(_overlay(theme, trials, lambda tr: tr.rep_voltage, "Representative home voltage", "V (L-N)",
-                                 hlines=[(config.v_ln, "nominal", sem["muted"])]), use_container_width=True, theme=None, config=_chart_config())
+                                 hlines=[(config.v_ln, "nominal", sem["muted"])]), width='stretch', theme=None, config=_chart_config())
     with c2:
         st.plotly_chart(_overlay(theme, trials, lambda tr: tr.stress_signal,
                                  "Stress the controller senses", "A (impedance-normalised)"),
-                        use_container_width=True, theme=None, config=_chart_config())
+                        width='stretch', theme=None, config=_chart_config())
     st.plotly_chart(_overlay(theme, trials, lambda tr: tr.min_voltage, "Weakest-home voltage (worst sag)", "V (L-N)",
                              hlines=[(config.v_ln, "nominal", sem["muted"]), (config.v_ln * 0.9, "-10%", sem["caution"])]),
-                    use_container_width=True, theme=None, config=_chart_config())
+                    width='stretch', theme=None, config=_chart_config())
     st.caption("Baseline has no sensing (flat). PACER turns the voltage sag into an impedance-normalised stress, so "
                "it works on weak feeders sagging to ~190 V, and backs off when stress runs high.")
     _back_to_top()
@@ -1089,7 +1089,7 @@ def _sim_detection(active, theme):
     st.plotly_chart(_overlay(theme, trials, lambda tr: tr.phase_heat_pct.max(axis=1),
                              "Worst-phase fuse-heat, three controllers", "% of melting",
                              hlines=[(100, "melt", sem["danger"]), (72, "beacon ceiling (85% level)", sem["caution"])]),
-                    use_container_width=True, theme=None, config=_chart_config())
+                    width='stretch', theme=None, config=_chart_config())
     sel = st.selectbox("Per-phase detail for mode", [_MODE_LABEL[mv] for mv in _MODE_ORDER], key="det_mode")
     mv = {v: k for k, v in _MODE_LABEL.items()}[sel]
     tr = trials[mv]
@@ -1102,7 +1102,7 @@ def _sim_detection(active, theme):
         fig.add_hline(y=100, line=dict(color=sem["danger"], width=1, dash="dash"))
         _add_event_markers(fig, tr, theme)
         fig.update_layout(title=f"Per-phase fuse-heat ({sel})", yaxis_title="% of melting", xaxis_title="minutes from restoration")
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     with c2:
         fig = themed_figure(theme, height=300)
         for ph in range(config.phases):
@@ -1111,7 +1111,7 @@ def _sim_detection(active, theme):
                       annotation_position="top left", annotation_font=dict(color=sem["danger"], size=10))
         _add_event_markers(fig, tr, theme, mark_blow=False)
         fig.update_layout(title=f"Per-phase load ({sel})", yaxis_title="x rating", xaxis_title="minutes from restoration")
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     chips = []
     for mvv in _MODE_ORDER:
         tt = trials[mvv]
@@ -1128,14 +1128,14 @@ def _sim_assimilation(active, theme):
     _kicker(f"Assimilation - aggregating {mc.n_runs} randomised trials per mode, and sweeping conditions")
     c1, c2 = st.columns(2)
     with c1:
-        st.plotly_chart(_blowbar(mc, theme, height=320), use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(_blowbar(mc, theme, height=320), width='stretch', theme=None, config=_chart_config())
     with c2:
         fig = themed_figure(theme, height=320)
         for mv in _MODE_ORDER:
             fig.add_trace(go.Box(y=mc.stats[ControllerMode(mv)].homes_dark, name=_MODE_LABEL[mv],
                                  marker_color=mcl[mv], boxpoints=False, line=dict(width=1.2)))
         fig.update_layout(title="Homes dark per restoration", yaxis_title="homes", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     st.markdown("###### Statistical tests (two-proportion, blow-out rate)")
     for tt in mc.pairwise_tests:
         verdict = "significant" if tt.p_value < 0.05 else "not significant at 0.05"
@@ -1145,7 +1145,7 @@ def _sim_assimilation(active, theme):
     st.markdown("#### Sensitivity sweep")
     sc1, sc2 = st.columns([3, 1])
     var_label = sc1.selectbox("Sweep variable", list(SWEEP_VARIABLES.keys()), key="sweep_var")
-    if sc2.button("Run sweep", use_container_width=True):
+    if sc2.button("Run sweep", width='stretch'):
         from dataclasses import replace
         field = SWEEP_VARIABLES[var_label]
         values = SWEEP_RANGES[field]
@@ -1176,7 +1176,7 @@ def _sim_assimilation(active, theme):
                                      name=_MODE_LABEL[mv], line=dict(color=mcl[mv], width=1.9), marker=dict(size=6)))
         fig.update_layout(title=f"Blow-out rate vs {var_label}  ({sweep.n_runs} runs/point)",
                           xaxis_title=var_label, yaxis_title="% of runs")
-        st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     else:
         st.caption("Pick a variable and press Run sweep to trace how blow-outs respond as it changes, holding "
                    "everything else fixed -- a clean, un-rigged sensitivity curve.")
@@ -1211,7 +1211,7 @@ def _sim_economics(active, theme):
     fig.add_trace(go.Bar(x=[_MODE_LABEL["pacer"], _MODE_LABEL["pacer_beacon"]], y=[pacer_ch, beacon_ch],
                          marker_color=[mcl["pacer"], mcl["pacer_beacon"]], width=0.5))
     fig.update_layout(title="Customer-hours of outage avoided per summer", yaxis_title="customer-hours", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, theme=None, config=_chart_config())
+    st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     st.markdown("#### Programme economics (project estimates)")
     _stat_tiles([
         ("Rs 1.6-3.1 lakh", "per transformer capex + Rs 4,500-10,000 / yr", "accent"),
@@ -1232,7 +1232,7 @@ def _sim_ledger(theme):
         _back_to_top()
         return
     df = pd.DataFrame(led)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
     lc1, lc2 = st.columns([1, 4])
     lc1.download_button("Download CSV", df.to_csv(index=False).encode(), file_name="pacer_ledger.csv", mime="text/csv")
     if lc2.button("Clear ledger"):
