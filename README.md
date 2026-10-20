@@ -13,13 +13,19 @@ identical scenarios:
 
 The physics engine (`engine/`) is **pure Python + numpy with zero Streamlit
 imports**. It runs from the command line and is covered by a golden-regression
-test. A Streamlit UI (`app.py`, `theme/`) is a full project showcase with a
-dark/light engineering theme, hand-built theme-aware SVG diagrams, and six
-sections: **Overview**, **Problem & solution** (the surge mechanism, the
-three-layer architecture, the seven-rule control loop, feeder and hardware
-drawings), **Simulator** (Simulation, Monte Carlo, Results and verification),
-**Impact & case** (impact assessment, innovation/IP, challenge alignment),
-**Delivery** (user journey, roadmap, methodology), and **Team & about**.
+test. A Streamlit UI (`app.py`, `theme/`) wraps the engine in a full project
+showcase with a **neumorphic, minimalist** design that flips cleanly between
+light and dark, plus hand-built theme-aware SVG diagrams.
+
+The **Simulator** is the centrepiece: one scenario run head-to-head across the
+three modes and dissected through nine views — **Overview, Structure,
+Environment, Sensing, Detection, Assimilation, Economics, Ledger, Provenance** —
+with scenario presets, a sensitivity sweep, a per-session run ledger, and full
+reproducibility provenance. Five showcase sections surround it: **Overview**,
+**Problem & solution** (the surge mechanism, the three-layer architecture, the
+seven-rule control loop, feeder and hardware drawings), **Impact & case**
+(impact assessment, innovation/IP, challenge alignment), **Delivery** (user
+journey, roadmap, methodology), and **Team & about**.
 
 ---
 
@@ -215,7 +221,7 @@ engine/            pure, UI-free, tested physics + controller
   cli.py           command-line headline comparison
 app.py             Streamlit UI (UI only; drives and reads the engine)
 theme/             theme system
-  palette.py       the two engineering palettes (exact hexes)
+  palette.py       the two palettes — neumorphic + minimalist (exact hexes)
   css.py           injected CSS: CSS variables + Streamlit restyle
   plotly_template.py  Plotly templates bound to the active theme
   diagrams.py      hand-built, theme-aware SVG diagrams
