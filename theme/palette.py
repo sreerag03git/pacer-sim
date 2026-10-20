@@ -33,11 +33,11 @@ PALETTES: dict[str, dict[str, str]] = {
         "panel_border": "#CDD3DD",       # visible stroke for drawings
         "border": "#D6DBE3",             # near-invisible hairline (used sparingly)
         "text": "#272B33",
-        "muted": "#747B88",
+        "muted": "#646A75",              # WCAG AA (4.5:1) on the light canvas
         "accent": "#4C5EC4",             # one muted indigo -- brand / primary series
-        "danger": "#D15C63",             # fuse blow / overload
-        "caution": "#CE9438",            # warnings
-        "ok": "#3B8E7E",                 # healthy / safe (deep teal, not a bright green)
+        "danger": "#C0373E",             # fuse blow / overload (AA 4.5:1)
+        "caution": "#A27328",            # warnings -- deep amber (AA-large / graphical 3:1)
+        "ok": "#317568",                 # healthy / safe (deep teal, not a bright green; AA 4.5:1)
         # derived
         "accent_soft": "rgba(76, 94, 196, 0.12)",
         "danger_soft": "rgba(209, 92, 99, 0.12)",
@@ -56,8 +56,8 @@ PALETTES: dict[str, dict[str, str]] = {
         "gradient_soft": "linear-gradient(135deg, rgba(76,94,196,0.10), rgba(62,79,176,0.08))",
         # restrained categorical sequence; first three are the three phases
         "cat1": "#4C5EC4",  # indigo
-        "cat2": "#3B8E7E",  # teal
-        "cat3": "#CE9438",  # amber
+        "cat2": "#317568",  # teal (matches ok)
+        "cat3": "#A27328",  # amber (matches caution)
         "cat4": "#6B7791",  # slate
         "cat5": "#B06A66",  # muted terracotta
     },
