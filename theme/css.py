@@ -145,6 +145,32 @@ pre, code, .stCode { background: var(--bg) !important; color: var(--text) !impor
 #MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"], footer { display: none !important; }
 [data-testid="stHeader"] { background: transparent; height: 0; }
 
+/* Accessibility: visible keyboard focus (WCAG 2.4.7). The borderless soft
+   controls strip the default outline, so keyboard users need an explicit ring. */
+.stButton > button:focus-visible, .stDownloadButton > button:focus-visible,
+.stNumberInput button:focus-visible,
+.stTextInput input:focus-visible, .stNumberInput input:focus-visible, .stTextArea textarea:focus-visible,
+[data-baseweb="tab"]:focus-visible,
+[data-baseweb="slider"] div[role="slider"]:focus-visible,
+[data-testid="stExpander"] summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+/* baseweb wraps inputs/selects -- ring the wrapper when the inner control is focused */
+[data-baseweb="input"]:focus-within, [data-baseweb="select"] > div:focus-within {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* the sidebar nav hides the radio dot, so surface focus on the label itself */
+[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:focus-visible) {
+  outline: 2px solid var(--accent); outline-offset: 2px; color: var(--text);
+}
+
+/* Respect reduced-motion (WCAG 2.3.3): drop the hover lifts and transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+  .pacer-stat:hover, .pacer-card:hover { transform: none !important; }
+}
+
 /* ---- custom components -------------------------------------------------- */
 
 /* Sticky header -- an opaque band that stays flush with the flat canvas */
