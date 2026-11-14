@@ -218,6 +218,27 @@ def test_fuse_gg_fit_and_tcc() -> None:
     assert not np.array_equal(on.phase_heat_pct, off.phase_heat_pct)  # flag changes the fuse
 
 
+def test_inrush_bites_lockstep_not_staggered() -> None:
+    """Locked-rotor inrush is quadratic in simultaneity: coincident lockstep
+    (baseline) starts lift the fuse heat, while PACER's stagger makes it negligible
+    -- which is the point. Deterministic; the high-fidelity path runs; default (off)
+    is byte-for-byte covered by the golden."""
+    def peak(mode, inrush):
+        return float(run_trial(
+            Config(seed=7, model_inrush=inrush).with_mode(mode), 0).phase_heat_pct.max())
+
+    base_off, base_on = peak(ControllerMode.BASELINE, False), peak(ControllerMode.BASELINE, True)
+    pacer_off, pacer_on = peak(ControllerMode.PACER, False), peak(ControllerMode.PACER, True)
+    assert base_on > base_off  # lockstep inrush adds heat
+    assert (base_on - base_off) > (pacer_on - pacer_off)  # stagger defeats it
+
+    on = run_trial(Config(seed=7, model_inrush=True).with_mode(ControllerMode.BASELINE), 0)
+    on2 = run_trial(Config(seed=7, model_inrush=True).with_mode(ControllerMode.BASELINE), 0)
+    assert np.array_equal(on.phase_heat_pct, on2.phase_heat_pct)  # deterministic
+    hf = Config(seed=7, model_inrush=True, high_fidelity_inrush=True).with_mode(ControllerMode.BASELINE)
+    assert np.array_equal(run_trial(hf, 0).phase_heat_pct, run_trial(hf, 0).phase_heat_pct)
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -230,6 +251,7 @@ def _run_standalone() -> int:
         test_loadflow_neutral_rises_with_imbalance,
         test_reactance_path_outputs_and_determinism,
         test_fuse_gg_fit_and_tcc,
+        test_inrush_bites_lockstep_not_staggered,
     ]
     failed = 0
     for t in tests:

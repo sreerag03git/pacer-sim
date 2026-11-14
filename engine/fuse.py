@@ -106,6 +106,19 @@ class FuseBank:
         # A blown phase stays open (no further heating tracked meaningfully).
         self.theta[self.blown] = np.maximum(self.theta[self.blown], self.theta_melt)
 
+    def add_inrush(self, excess_i2t_a2s: np.ndarray, minute: int) -> None:
+        """Add motor-start locked-rotor inrush as an I2t energy impulse on the
+        element (excess A^2*s per phase, over the running current it replaces), on
+        top of the steady heating, latching any phase that reaches melt. The I2t
+        -> element-temperature map follows the same first-order element model."""
+        dtheta = np.asarray(excess_i2t_a2s, dtype=float) / (self.i_fuse**2 * self.p.tau_min * 60.0)
+        self.theta = self.theta + np.maximum(dtheta, 0.0)
+        newly = (~self.blown) & (self.theta >= self.theta_melt)
+        if np.any(newly):
+            self.blown |= newly
+            self.blow_minute[newly] = minute
+        self.theta[self.blown] = np.maximum(self.theta[self.blown], self.theta_melt)
+
     def heat_percent(self) -> np.ndarray:
         """Fuse-heat for each phase as a percentage of the melting level."""
         return 100.0 * self.theta / self.theta_melt

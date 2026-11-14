@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from engine.appliances import ApplianceKind
 from engine.beacon import Beacon
 from engine.config import Config, ControllerMode
 from engine.devices import build_devices
@@ -31,6 +32,16 @@ _RESERVOIR_DEADBAND = 0.15
 _HEAT_EXPOSURE_C = 32.0  # indoor temperature above which occupants are "in heat"
 # Pre-roll length to settle rooms/reservoirs before recorded warm-up begins.
 _SETTLE_MINUTES = 90
+
+# Locked-rotor inrush (motor starts): I_start = k_LR * I_rated for _INRUSH_S s,
+# decaying linearly to the running current. Motors starting together add in the
+# same conductor, so the fuse sees the *aggregate* excess current dI_0 = (k-1) *
+# sum(I_rated) on that phase. Its excess I2t over the running current (phase I_run)
+# is int(2*I_run*dI + dI^2)dt over the linear-decay pulse = S*I_run*dI_0 +
+# (S/3)*dI_0^2 (A^2*s). This is quadratic in simultaneity -- lockstep restart bites,
+# a staggered one barely does. Defaults k=7, 0.3 s.
+_INRUSH_K_LR = 7.0
+_INRUSH_S = 0.3
 
 
 @dataclass
@@ -164,6 +175,13 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     rep_home = feeder.representative_home()
     room_minutes_hot = np.zeros(dev.n_rooms)
 
+    # Motor-inrush bookkeeping (fixed-speed AC compressor + water pump have a true
+    # locked rotor; inverter AC/chargers soft-start, so no inrush). Zero cost when off.
+    inrush_mask = (dev.kind == int(ApplianceKind.FIXED_AC)) | (dev.kind == int(ApplianceKind.WATER_PUMP))
+    i_rated_dev = dev.rated_kw * 1000.0 / (cfg.v_ln * cfg.power_factor)  # running current (A)
+    served_on_prev = np.zeros(dev.n_devices, dtype=bool)
+    n_sub = max(int(round(dt * 60.0)), 1)  # 1 s fuse sub-steps for high_fidelity_inrush
+
     # carried state between minutes
     v_prev_home = np.full(H, cfg.v_ln)
     phase_i_prev = np.zeros(cfg.phases)
@@ -260,7 +278,24 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         ts_vuf[t] = feeder.vuf_pct
 
         # --- advance physics ---
-        fuse.step(phase_i, t, dt)
+        if cfg.model_inrush:
+            started = inrush_mask & (served > 1e-6) & (~served_on_prev)
+            served_on_prev = served > 1e-6
+            if np.any(started):
+                di0 = (_INRUSH_K_LR - 1.0) * np.bincount(
+                    dev.phase[started], weights=i_rated_dev[started], minlength=cfg.phases)
+                excess_phase = _INRUSH_S * phase_i * di0 + (_INRUSH_S / 3.0) * di0**2
+            else:
+                excess_phase = np.zeros(cfg.phases)
+            if cfg.high_fidelity_inrush and in_recovery and 0 <= m < 5:
+                fuse.add_inrush(excess_phase, t)  # impulse at the start instant
+                for _ in range(n_sub):  # 1 s resolution in the critical window
+                    fuse.step(phase_i, t, dt / n_sub)
+            else:
+                fuse.step(phase_i, t, dt)
+                fuse.add_inrush(excess_phase, t)
+        else:
+            fuse.step(phase_i, t, dt)
         apparent_kva = home_power.sum() / cfg.power_factor
         load_pu = apparent_kva / cfg.nameplate_kva
         thermal.step(load_pu, ambient_c, dt)

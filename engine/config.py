@@ -112,6 +112,11 @@ class Config:
     # Opt-in: calibrate the fuse element to the IEC 60269 gG envelope (least-squares
     # fit, engine/fuse.py). Default False keeps the original constants byte-for-byte.
     fuse_iec_gg: bool = False
+    # Opt-in: model locked-rotor inrush at motor (fixed-speed AC / pump) starts as an
+    # I2t energy impulse on the fuse element. Default False = no inrush (byte-identical
+    # golden). high_fidelity_inrush sub-steps the fuse at 1 s for 5 min post-restore.
+    model_inrush: bool = False
+    high_fidelity_inrush: bool = False
 
     # --- event timeline (minutes) ----------------------------------------------
     warmup_minutes: int = 180  # normal operation before the cut (learner trains here)
@@ -210,6 +215,8 @@ class Config:
                 round(self.tx_percent_z, 6), round(self.tx_tap_pu, 6),
             )),
             *(("gg",) if self.fuse_iec_gg else ()),
+            *(("inr",) if self.model_inrush else ()),
+            *(("hfi",) if self.high_fidelity_inrush else ()),
         )
 
     def with_mode(self, mode: ControllerMode) -> "Config":

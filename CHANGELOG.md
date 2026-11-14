@@ -2,6 +2,20 @@
 
 ## Phase 2 — motor inrush + real fuse (in progress)
 
+**Locked-rotor motor inrush** (`engine/simulation.py`, `engine/fuse.py`). Opt-in
+via `Config.model_inrush` (default **False** = byte-identical golden). Fixed-speed
+AC compressors and water pumps draw `I_start = k_LR * I_rated` (k=7) for 0.3 s
+decaying to running current; `FuseBank.add_inrush` adds the excess I2t as an
+impulse on the element. Modelled as the *aggregate* per phase — motors starting in
+the same minute add in the same conductor, so the excess energy is quadratic in
+simultaneity (`S*I_run*dI0 + (S/3)*dI0^2`). Result: lockstep baseline restart gets
+a real inrush bump (peak fuse-heat 108.8 -> 109.5%), while PACER's stagger makes it
+negligible (90.2% unchanged) — inrush is one more thing staggering defeats.
+`high_fidelity_inrush` sub-steps the fuse at 1 s for 5 min post-restore (finer melt
+timing; with a minute-resolution surrounding sim its effect is small). Inverter
+AC/chargers soft-start, so they carry no inrush. Test: inrush lifts lockstep heat
+more than staggered, deterministic, hi-fi path runs.
+
 **Fuse calibrated to the IEC 60269 gG envelope** (`engine/fuse.py`). Added a
 representative generic gG pre-arcing envelope (`IEC_GG_GATES`, labelled the
 standard shape — no manufacturer datasheet bundled; cite IEC 60269-1 cat. gG), a
