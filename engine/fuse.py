@@ -12,8 +12,45 @@ expressed as a fraction of its melting temperature; the fuse blows at 100%.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
+
+# Representative IEC 60269-1 gG pre-arcing (melting) envelope in the sustained-
+# overload region: current as a multiple of rated In, and pre-arcing time (s).
+# This is a GENERIC gG shape (no manufacturer datasheet is bundled), labelled as
+# the standard envelope -- cite IEC 60269-1, utilisation category gG. The first-
+# order element surrogate is fitted to it near the operating point; a real gG
+# curve is steeper than any first-order thermal model, so the two agree around
+# ~2x In (where restart blow-outs occur) and diverge at the extremes -- the sub-
+# second high-current end is energy, handled by the inrush I2t impulse, not tau.
+IEC_GG_GATES = [(1.8, 600.0), (2.0, 300.0), (2.5, 120.0), (3.0, 40.0)]
+
+
+def _model_melt_min(ratio, tau_min: float, melting_factor: float):
+    """Pre-arcing time (min) from cold at a sustained current ``ratio`` = I/In."""
+    r2 = np.asarray(ratio, dtype=float) ** 2
+    mf2 = melting_factor ** 2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = tau_min * np.log(r2 / (r2 - mf2))
+    return np.where(r2 > mf2, t, np.inf)
+
+
+@lru_cache(maxsize=1)
+def fit_gg_params() -> "FuseParams":
+    """Least-squares fit of (tau_min, melting_factor) so the surrogate's pre-arcing
+    time passes through the gG envelope (IEC_GG_GATES). Cached -- the gates are
+    constant. Best near the operating point; see IEC_GG_GATES for the caveat."""
+    from scipy.optimize import least_squares
+
+    r = np.array([g[0] for g in IEC_GG_GATES], dtype=float)
+    t_min = np.array([g[1] / 60.0 for g in IEC_GG_GATES], dtype=float)
+
+    def resid(x):
+        return np.log(np.maximum(_model_melt_min(r, x[0], x[1]), 1e-9)) - np.log(t_min)
+
+    sol = least_squares(resid, x0=[6.0, 1.45], bounds=([0.5, 1.1], [60.0, 1.70]))
+    return FuseParams(melting_factor=float(sol.x[1]), tau_min=float(sol.x[0]))
 
 
 @dataclass
@@ -85,6 +122,14 @@ class FuseBank:
             den = theta_ss[rising] - self.theta_melt
             out[rising] = self.p.tau_min * np.log(num / den)
         return out
+
+    def time_current_curve(self, ratios: np.ndarray | None = None):
+        """Modelled pre-arcing time (min) vs current (multiple of rated), from cold.
+        For plotting the surrogate against the gG envelope (IEC_GG_GATES)."""
+        if ratios is None:
+            ratios = np.geomspace(self.p.melting_factor * 1.02, 10.0, 60)
+        ratios = np.asarray(ratios, dtype=float)
+        return ratios, _model_melt_min(ratios, self.p.tau_min, self.p.melting_factor)
 
     def any_blown(self) -> bool:
         return bool(np.any(self.blown))

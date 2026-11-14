@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.config import Config, ControllerMode
 from engine.devices import build_devices
+from engine.fuse import FuseBank, fit_gg_params, IEC_GG_GATES
 from engine.grid import FeederModel
 from engine.loadflow import nema_vuf, solve_feeder
 from engine.montecarlo import run_sweep
@@ -194,6 +195,29 @@ def test_reactance_path_outputs_and_determinism() -> None:
     assert off.peak_neutral_a == 0.0 and off.max_vuf_pct == 0.0
 
 
+def test_fuse_gg_fit_and_tcc() -> None:
+    """The surrogate fits the IEC gG envelope (least squares) within a factor of
+    ~2 across the sustained-overload region and tightly at the 2x operating point;
+    its time-current curve is monotone. The opt-in flag feeds through a trial
+    deterministically and actually changes the fuse (default keeps old constants)."""
+    p = fit_gg_params()
+    assert 1.1 < p.melting_factor <= 1.70 and 0.5 < p.tau_min < 60.0
+    fb = FuseBank(100.0, params=p)
+    _, t = fb.time_current_curve()
+    assert np.all(np.diff(t) <= 1e-9)  # monotone non-increasing with current
+    for mult, secs in IEC_GG_GATES:
+        tm = float(fb.time_current_curve([mult])[1][0]) * 60.0
+        assert max(tm / secs, secs / tm) < 2.5  # within ~2x across the envelope
+        if mult == 2.0:
+            assert abs(tm - secs) / secs < 0.30  # tight at the operating point
+
+    on = run_trial(Config(homes=60, seed=7, fuse_iec_gg=True).with_mode(ControllerMode.BASELINE), 0)
+    on2 = run_trial(Config(homes=60, seed=7, fuse_iec_gg=True).with_mode(ControllerMode.BASELINE), 0)
+    off = run_trial(Config(homes=60, seed=7).with_mode(ControllerMode.BASELINE), 0)
+    assert np.array_equal(on.phase_heat_pct, on2.phase_heat_pct)  # deterministic
+    assert not np.array_equal(on.phase_heat_pct, off.phase_heat_pct)  # flag changes the fuse
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -205,6 +229,7 @@ def _run_standalone() -> int:
         test_nema_vuf_hand_case,
         test_loadflow_neutral_rises_with_imbalance,
         test_reactance_path_outputs_and_determinism,
+        test_fuse_gg_fit_and_tcc,
     ]
     failed = 0
     for t in tests:

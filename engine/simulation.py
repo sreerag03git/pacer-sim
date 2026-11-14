@@ -21,7 +21,7 @@ import numpy as np
 from engine.beacon import Beacon
 from engine.config import Config, ControllerMode
 from engine.devices import build_devices
-from engine.fuse import FuseBank
+from engine.fuse import FuseBank, fit_gg_params
 from engine.grid import FeederModel
 from engine.pacer_core import PacerController
 from engine.thermal import IECThermalModel, RoomModel, RoomParams, ambient_series
@@ -131,7 +131,7 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
 
     thermal = IECThermalModel()
     thermal.reset(amb[0])
-    fuse = FuseBank(cfg.fuse_current_a)
+    fuse = FuseBank(cfg.fuse_current_a, params=fit_gg_params() if cfg.fuse_iec_gg else None)
     fuse.reset(np.zeros(cfg.phases))  # heat up from cold during warm-up
 
     controller = PacerController(dev, cfg)

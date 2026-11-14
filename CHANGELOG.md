@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 2 — motor inrush + real fuse (in progress)
+
+**Fuse calibrated to the IEC 60269 gG envelope** (`engine/fuse.py`). Added a
+representative generic gG pre-arcing envelope (`IEC_GG_GATES`, labelled the
+standard shape — no manufacturer datasheet bundled; cite IEC 60269-1 cat. gG), a
+least-squares fit of the element `(tau, melting_factor)` to it (`fit_gg_params`),
+and `FuseBank.time_current_curve()` for overlaying the modelled curve on the
+envelope. Opt-in via `Config.fuse_iec_gg` (default **False** keeps the original
+constants byte-for-byte). The fit is within ~2x across the sustained-overload
+region and tight (~0.8x) at the 2x operating point where restart blow-outs occur.
+
+**Limitation (honest):** a first-order thermal surrogate is gentler than a real
+gG curve, so the two agree near ~2x In and diverge at the extremes; the sub-
+second high-current end is energy, which the inrush I2t impulse (next) handles,
+not `tau`. Opt-in, not the default, so headline numbers are unmoved.
+
 ## Phase 1 — electrical physics (in progress)
 
 **Load-flow solver core** (`engine/loadflow.py`, new): a four-wire unbalanced

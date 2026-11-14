@@ -109,6 +109,9 @@ class Config:
     # ("tight fuse"); >1 is a looser fuse, <1 an over-tight one.
     fuse_rating_a: Optional[float] = None
     fuse_tightness: float = 1.0
+    # Opt-in: calibrate the fuse element to the IEC 60269 gG envelope (least-squares
+    # fit, engine/fuse.py). Default False keeps the original constants byte-for-byte.
+    fuse_iec_gg: bool = False
 
     # --- event timeline (minutes) ----------------------------------------------
     warmup_minutes: int = 180  # normal operation before the cut (learner trains here)
@@ -206,6 +209,7 @@ class Config:
                 round(self.xr_cable, 6), round(self.xr_transformer, 6),
                 round(self.tx_percent_z, 6), round(self.tx_tap_pu, 6),
             )),
+            *(("gg",) if self.fuse_iec_gg else ()),
         )
 
     def with_mode(self, mode: ControllerMode) -> "Config":
