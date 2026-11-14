@@ -77,6 +77,11 @@ class TrialResult:
     stress_signal: np.ndarray = field(repr=False)  # mean impedance-normalised stress sensed (A)
     z_estimate_median: float = 0.0  # median self-measured line impedance (ohm)
     learned_normal_v_mean: float = 0.0  # mean learned-normal voltage at restoration (V)
+    # four-wire load-flow outputs (zero unless config.use_reactance)
+    i_neutral_a: np.ndarray = field(default_factory=lambda: np.zeros(0), repr=False)
+    vuf_pct: np.ndarray = field(default_factory=lambda: np.zeros(0), repr=False)
+    peak_neutral_a: float = 0.0
+    max_vuf_pct: float = 0.0
 
     APPLIANCE_LABELS = ("Inverter AC", "Fixed AC", "Inverter charger", "E-rickshaw", "Water pump", "Base load")
 
@@ -113,7 +118,13 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     H = cfg.homes
     amb = ambient_series(T, cfg.day_start_minute, cfg.peak_ambient_c, cfg.ambient_night_c)
 
-    feeder = FeederModel(dev.home_phase, cfg.v_ln, cfg.power_factor, scenario_rng)
+    feeder = FeederModel(
+        dev.home_phase, cfg.v_ln, cfg.power_factor, scenario_rng,
+        use_reactance=cfg.use_reactance, xr_cable=cfg.xr_cable,
+        xr_transformer=cfg.xr_transformer, tx_percent_z=cfg.tx_percent_z,
+        tx_tap_pu=cfg.tx_tap_pu, nameplate_kva=cfg.nameplate_kva,
+        home_np=dev.home_np, home_nq=dev.home_nq,
+    )
     rooms = RoomModel(dev.n_rooms, RoomParams())
     rooms.reset(amb[0], scenario_rng)
     reservoir_x = dev.reservoir_x0.copy()
@@ -146,6 +157,8 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     ts_serving = np.zeros(T)
     ts_held = np.zeros(T)
     ts_stress = np.zeros(T)
+    ts_ineutral = np.zeros(T)  # source neutral current (A); nonzero only with use_reactance
+    ts_vuf = np.zeros(T)  # NEMA voltage unbalance (%); nonzero only with use_reactance
     kind_masks = [dev.kind == k for k in range(5)]
 
     rep_home = feeder.representative_home()
@@ -243,6 +256,8 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         v_home = feeder.home_voltages(home_power)
         v_home_eff = np.where(supply_home, v_home, 0.0)
         phase_i = feeder.phase_currents(home_power)
+        ts_ineutral[t] = feeder.i_neutral_mag
+        ts_vuf[t] = feeder.vuf_pct
 
         # --- advance physics ---
         fuse.step(phase_i, t, dt)
@@ -361,6 +376,10 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         stress_signal=ts_stress,
         z_estimate_median=z_estimate_median,
         learned_normal_v_mean=learned_normal_v_mean,
+        i_neutral_a=ts_ineutral,
+        vuf_pct=ts_vuf,
+        peak_neutral_a=float(ts_ineutral.max()),
+        max_vuf_pct=float(ts_vuf.max()),
     )
 
 

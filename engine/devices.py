@@ -43,6 +43,8 @@ class Devices:
     home_phase: np.ndarray
     home_base_kw: np.ndarray
     home_vulnerable: np.ndarray
+    home_np: np.ndarray  # aggregate voltage-dependence exponent (P) per home
+    home_nq: np.ndarray  # aggregate voltage-dependence exponent (Q) per home
 
     # --- room bookkeeping ---
     n_rooms: int
@@ -147,6 +149,21 @@ def build_devices(config: Config, rng: np.random.Generator) -> Devices:
 
     is_vulnerable = home_vulnerable[home]
 
+    # Voltage-dependence (exponential load model) exponents per kind: power
+    # electronics (inverter AC/charger, e-rickshaw) are constant power (np=nq=0);
+    # motors (fixed-speed AC, pump) are a ZIP-ish blend; resistive base load is
+    # np=nq=2. Aggregate to a per-home kW-weighted exponent for the feeder solve.
+    np_by_kind = {
+        ApplianceKind.INVERTER_AC: (0.0, 0.0), ApplianceKind.FIXED_AC: (0.8, 2.0),
+        ApplianceKind.INVERTER_CHARGER: (0.0, 0.0), ApplianceKind.ERICKSHAW_CHARGER: (0.0, 0.0),
+        ApplianceKind.WATER_PUMP: (0.8, 2.0),
+    }
+    dev_np = np.array([np_by_kind[ApplianceKind(k)][0] for k in kind]) if D else np.zeros(0)
+    dev_nq = np.array([np_by_kind[ApplianceKind(k)][1] for k in kind]) if D else np.zeros(0)
+    den = np.bincount(home, weights=rated_kw, minlength=H) + home_base_kw  # > 0 (base load)
+    home_np = (np.bincount(home, weights=rated_kw * dev_np, minlength=H) + home_base_kw * 2.0) / den
+    home_nq = (np.bincount(home, weights=rated_kw * dev_nq, minlength=H) + home_base_kw * 2.0) / den
+
     # Random hardware faults -> PACER pass-through for that device. Zero by
     # default (config.fault_probability); set it above 0 to exercise the rail.
     fault = rng.random(D) < config.fault_probability
@@ -171,6 +188,8 @@ def build_devices(config: Config, rng: np.random.Generator) -> Devices:
         home_phase=home_phase,
         home_base_kw=home_base_kw,
         home_vulnerable=home_vulnerable,
+        home_np=home_np,
+        home_nq=home_nq,
         n_rooms=len(room_home_list),
         room_home=np.array(room_home_list, dtype=int),
     )

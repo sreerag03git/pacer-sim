@@ -93,6 +93,16 @@ class Config:
     v_ln: float = 240.0  # nominal line-to-neutral voltage (V)
     power_factor: float = 0.90  # aggregate displacement power factor (lagging)
 
+    # --- line reactance / four-wire load flow (Phase 1, opt-in) ----------------
+    # Off by default: the resistive feeder reproduces today's results byte-for-byte.
+    # When True, FeederModel solves a four-wire unbalanced load flow (engine/
+    # loadflow.py) with complex Z = R + jX, exposing neutral current and NEMA VUF.
+    use_reactance: bool = False
+    xr_cable: float = 0.4  # LV cable X/R (typical)
+    xr_transformer: float = 5.0  # transformer X/R (typical)
+    tx_percent_z: float = 4.5  # transformer %Z -> source impedance
+    tx_tap_pu: float = 1.0  # off-load tap (secondary voltage multiplier)
+
     # Protective fuse. ``fuse_rating_a`` is the per-phase fuse rated current (A).
     # If left None it is derived from the nameplate and ``fuse_tightness``:
     # tightness 1.0 means the fuse is rated exactly at transformer rated current
@@ -191,6 +201,11 @@ class Config:
             round(self.ambient_night_c, 6),
             self.mc_runs,
             self.seed,
+            # reactance params only when enabled, so the default key is unchanged
+            *(() if not self.use_reactance else (
+                round(self.xr_cable, 6), round(self.xr_transformer, 6),
+                round(self.tx_percent_z, 6), round(self.tx_tap_pu, 6),
+            )),
         )
 
     def with_mode(self, mode: ControllerMode) -> "Config":

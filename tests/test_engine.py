@@ -179,6 +179,21 @@ def test_loadflow_neutral_rises_with_imbalance() -> None:
         prev = cur
 
 
+def test_reactance_path_outputs_and_determinism() -> None:
+    """use_reactance wires the four-wire solver into a full trial: neutral current
+    and VUF become nonzero, voltages stay physical, the run is deterministic, and
+    the flag is off by default (outputs stay zero, old results untouched)."""
+    cfg = Config(homes=60, seed=7, use_reactance=True).with_mode(ControllerMode.BASELINE)
+    a = run_trial(cfg, trial_index=0)
+    b = run_trial(cfg, trial_index=0)
+    assert np.array_equal(a.i_neutral_a, b.i_neutral_a)  # deterministic
+    assert a.peak_neutral_a > 0.0 and a.max_vuf_pct > 0.0  # imbalance is real
+    assert 180.0 < float(a.rep_voltage.max()) < 250.0  # no runaway / overvoltage
+
+    off = run_trial(Config(homes=60, seed=7).with_mode(ControllerMode.BASELINE), trial_index=0)
+    assert off.peak_neutral_a == 0.0 and off.max_vuf_pct == 0.0
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -189,6 +204,7 @@ def _run_standalone() -> int:
         test_run_sweep_is_deterministic_and_ordered,
         test_nema_vuf_hand_case,
         test_loadflow_neutral_rises_with_imbalance,
+        test_reactance_path_outputs_and_determinism,
     ]
     failed = 0
     for t in tests:

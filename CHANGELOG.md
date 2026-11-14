@@ -10,14 +10,25 @@ voltage. Loads are voltage dependent (`P = P0 (V/V0)^np`, `Q = Q0 (V/V0)^nq`).
 Reports source **neutral current** and **NEMA MG 1 voltage-unbalance factor
 (VUF%)**, with convergence diagnostics (tol 1e-4 pu, max 8 sweeps).
 
-Unit tests (`tests/test_engine.py`): NEMA VUF hand-case; balanced population
-draws ~no neutral current and `|I_n|` rises monotonically with imbalance; the
-sweep converges.
+**Wired into the simulation** behind `Config.use_reactance` (default **False** =
+today's resistive model, so headline numbers and the golden fixture are unchanged
+byte-for-byte). When True, `FeederModel.home_voltages` runs the four-wire solver:
+transformer source impedance from `%Z` with `X/R = 5`, LV cable `X/R = 0.4` (one
+shared 4-wire route; per-segment Z scaled so end-to-end sag matches the calibrated
+resistive feeder), per-device `np/nq` exponents aggregated per home
+(`engine/devices.py`), and an off-load tap. New `TrialResult` outputs: `i_neutral_a`
+/ `vuf_pct` time series and `peak_neutral_a` / `max_vuf_pct`. A representative seed-7
+run gives peak neutral ~35% of rated phase current, VUF peaking ~9% at the surge
+instant, home voltage sagging ~240 to ~215 V — physical, not a fitted point.
 
-**Not yet wired into a run.** The solver is standalone and off the simulation
-path, so existing headline numbers and the golden fixture are unchanged
-byte-for-byte. Next increment: wire it into `FeederModel` behind a
-`use_reactance` config flag (default False = today's resistive model), derive
-the transformer source impedance from `%Z` with `X/R = 5` and LV cable `X/R =
-0.4`, attach per-device `np/nq`, surface `|I_n|` / VUF as trial outputs, and add
-a golden test for the reactive scenario.
+Tests: NEMA VUF hand-case; balanced population draws ~no neutral current and
+`|I_n|` rises monotonically with imbalance; the sweep converges; and a full
+`use_reactance=True` trial is deterministic, voltages stay physical, `|I_n|`/VUF
+are nonzero, while the default (off) path keeps those outputs zero.
+
+**Limitations (honest):** `use_reactance` is opt-in and not yet the default — the
+published comparison still runs the resistive model, so this adds physics without
+moving the headline numbers (flipping the default is a separate reviewed step with
+its own golden). The fuse current still comes from the nominal-voltage estimate,
+not re-derived from the load-flow phase currents; and there is no UI surface for
+`|I_n|` / VUF yet (that lands with the Phase 6 visuals).
