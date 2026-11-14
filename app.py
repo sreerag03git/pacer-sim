@@ -19,6 +19,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from engine.config import Config, ControllerMode, HeatwavePreset
+from engine.fuse import IEC_GG_GATES, FuseBank, fit_gg_params
 from engine.montecarlo import (
     SWEEP_VARIABLES,
     MonteCarloResult,
@@ -147,6 +148,7 @@ _SCENARIO_DEFAULTS = dict(
     sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
     sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=200, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
+    sc_reactance=False, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,
 )
 
 
@@ -542,7 +544,9 @@ def _build_config_from_state() -> tuple[Config, HeatwavePreset, float | None]:
         vulnerable_fraction=ss.sc_vuln / 100.0, base_load_kw_per_home=float(ss.sc_baseload),
         fault_probability=ss.sc_faultprob / 100.0, nameplate_kva=float(ss.sc_nameplate),
         fuse_tightness=float(ss.sc_tight), outage_minutes=int(ss.sc_outage), heatwave=heatwave,
-        ambient_peak_c=custom_peak, mc_runs=int(ss.sc_runs), seed=int(ss.sc_seed))
+        ambient_peak_c=custom_peak, mc_runs=int(ss.sc_runs), seed=int(ss.sc_seed),
+        use_reactance=bool(ss.sc_reactance), fuse_iec_gg=bool(ss.sc_fusegg),
+        model_inrush=bool(ss.sc_inrush), per_phase_thermal=bool(ss.sc_ppthermal))
     return config, heatwave, custom_peak
 
 
@@ -581,6 +585,12 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         st.slider("Base load per home (kW)", 0.05, 0.50, step=0.01, key="sc_baseload")
         st.slider("Device fault probability (%)", 0, 20, key="sc_faultprob",
                   help="Faulted devices fall back to pass-through, as if PACER were absent.")
+    with sb.expander("Advanced physics (opt-in, changes results)"):
+        st.caption("Off by default so the headline reproduces the validated figures.")
+        st.checkbox("Four-wire load flow (R+jX, neutral current, VUF)", key="sc_reactance")
+        st.checkbox("IEC 60269 gG fuse calibration", key="sc_fusegg")
+        st.checkbox("Motor locked-rotor inrush", key="sc_inrush")
+        st.checkbox("Per-phase winding hot-spots", key="sc_ppthermal")
     sb.markdown("###### Monte Carlo")
     sb.slider("Trials per mode", 10, 500, step=10, key="sc_runs")
     sb.number_input("Random seed", 0, 1_000_000, step=1, key="sc_seed")
@@ -1050,6 +1060,14 @@ def _sim_environment(active, theme):
                                   "Insulation ageing per restoration", "equivalent hours"), width='stretch', theme=None, config=_chart_config())
     st.caption("A hot room drives Rule 7: a cooling floor that always wins, so overheated homes reach full power "
                "within ~25 minutes even while the controller paces the rest.")
+    if config.per_phase_thermal:
+        _kicker("Per-phase winding hot-spots - the imbalance the Beacon targets")
+        st.plotly_chart(_overlay(theme, trials,
+                                 lambda tr: tr.hot_spot_phase_c.max(axis=1) - tr.hot_spot_phase_c.min(axis=1),
+                                 "Per-phase hot-spot spread (hottest - coolest phase)", "C"),
+                        width='stretch', theme=None, config=_chart_config())
+        st.caption("Three independent per-phase winding hot-spots (IEC 60076-7). Lockstep baseline loads the phases "
+                   "unevenly, so one winding runs much hotter; the Beacon rebalances and the spread collapses.")
     _back_to_top()
 
 
@@ -1077,7 +1095,43 @@ def _sim_sensing(active, theme):
                     width='stretch', theme=None, config=_chart_config())
     st.caption("Baseline has no sensing (flat). PACER turns the voltage sag into an impedance-normalised stress, so "
                "it works on weak feeders sagging to ~190 V, and backs off when stress runs high.")
+    if config.use_reactance:
+        _kicker("Four-wire load flow - neutral current and voltage unbalance")
+        n1, n2 = st.columns(2)
+        with n1:
+            st.plotly_chart(_overlay(theme, trials, lambda tr: tr.i_neutral_a,
+                                     "Source neutral current (|I_A+I_B+I_C|)", "A"),
+                            width='stretch', theme=None, config=_chart_config())
+        with n2:
+            st.plotly_chart(_overlay(theme, trials, lambda tr: tr.vuf_pct,
+                                     "Voltage unbalance (NEMA VUF)", "%",
+                                     hlines=[(3.0, "NEMA 3% limit", sem["caution"])]),
+                            width='stretch', theme=None, config=_chart_config())
+        st.caption("Unbalanced single-phase loads return through the neutral and skew the three phase voltages; "
+                   "the Beacon's phase rebalancing lowers both the neutral current and the unbalance.")
     _back_to_top()
+
+
+def _fuse_tcc_chart(config, trials, theme):
+    """Log-log fuse time-current curve (IEC 60269 gG envelope + model) with each
+    mode's peak sustained current marked -- a real technical drawing, not a slide."""
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    fb = FuseBank(config.fuse_current_a, params=fit_gg_params() if config.fuse_iec_gg else None)
+    ratios, t_min = fb.time_current_curve()
+    fig = themed_figure(theme, height=340)
+    fig.add_trace(go.Scatter(x=ratios, y=t_min, name="Fuse model (pre-arcing)", line=dict(color=sem["accent"], width=2)))
+    fig.add_trace(go.Scatter(x=[g[0] for g in IEC_GG_GATES], y=[g[1] / 60.0 for g in IEC_GG_GATES],
+                             name="IEC 60269 gG envelope", mode="markers", marker=dict(color=sem["muted"], size=9, symbol="x")))
+    for mv in _MODE_ORDER:
+        r = float(trials[mv].phase_load_pu.max()) / max(config.fuse_tightness, 1e-6)
+        fig.add_vline(x=r, line=dict(color=mcl[mv], width=1.5, dash="dash"),
+                      annotation_text=f"{_MODE_LABEL[mv]} {r:.1f}x", annotation_position="top",
+                      annotation_font=dict(color=mcl[mv], size=9))
+    fig.update_xaxes(type="log", title="current / fuse rating")
+    fig.update_yaxes(type="log", title="pre-arcing time (min)")
+    fig.update_layout(title="Fuse time-current curve + per-mode peak current")
+    return fig
 
 
 def _sim_detection(active, theme):
@@ -1118,6 +1172,9 @@ def _sim_detection(active, theme):
         state = f"blow at {tt.blow_minute_since_restore} min" if tt.blew else "held"
         chips.append(f'<span class="pacer-chip {"danger" if tt.blew else "ok"}">{_MODE_LABEL[mvv]}: {state}</span>')
     st.markdown(" ".join(chips), unsafe_allow_html=True)
+    st.plotly_chart(_fuse_tcc_chart(config, trials, theme), width='stretch', theme=None, config=_chart_config())
+    st.caption("The fuse's time-current curve against the IEC 60269 gG envelope. Each mode's peak sustained current "
+               "is marked: baseline sits far right (fast melt), PACER and the Beacon pull left into the safe region.")
     _back_to_top()
 
 
@@ -1308,9 +1365,11 @@ def main() -> None:
     _render_header(config, theme)
     st.markdown('<span id="main-content"></span>', unsafe_allow_html=True)
 
-    if run_clicked:
-        _do_run(config)
     active = st.session_state.active
+    # Auto-run the default scenario on first open so results show immediately.
+    if run_clicked or (active is None and area == "Simulator"):
+        _do_run(config)
+        active = st.session_state.active
 
     if area == "Simulator":
         tc1, tc2 = st.columns([1, 3], vertical_alignment="bottom")

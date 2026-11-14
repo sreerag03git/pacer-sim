@@ -25,32 +25,33 @@ THEMES = ("light", "dark")
 
 PALETTES: dict[str, dict[str, str]] = {
     "light": {
-        # Neumorphic base: canvas and card surfaces share this exact neutral tone.
-        "bg": "#E8EBEF",
-        "surface": "#E8EBEF",
-        "surface_2": "#EFF1F5",          # faint raised tint (hover / sub-surfaces)
-        "panel": "#F4F6F9",              # legible fill for SVG drawings
-        "panel_border": "#CDD3DD",       # visible stroke for drawings
-        "border": "#D6DBE3",             # near-invisible hairline (used sparingly)
+        # Flat, professional: a light canvas with white surfaces and a hairline
+        # border. Depth is a whisper of shadow, not a soft-UI extrusion.
+        "bg": "#F4F6F9",
+        "surface": "#FFFFFF",
+        "surface_2": "#F4F6F9",          # subtle sub-surface / hover / table header
+        "panel": "#FFFFFF",              # fill for SVG drawings
+        "panel_border": "#D8DDE5",       # visible stroke for drawings
+        "border": "#E3E7ED",             # hairline border on cards and inputs
         "text": "#272B33",
-        "muted": "#646A75",              # WCAG AA (4.5:1) on the light canvas
+        "muted": "#646A75",              # WCAG AA (4.5:1)
         "accent": "#4C5EC4",             # one muted indigo -- brand / primary series
         "danger": "#C0373E",             # fuse blow / overload (AA 4.5:1)
         "caution": "#A27328",            # warnings -- deep amber (AA-large / graphical 3:1)
         "ok": "#317568",                 # healthy / safe (deep teal, not a bright green; AA 4.5:1)
         # derived
-        "accent_soft": "rgba(76, 94, 196, 0.12)",
-        "danger_soft": "rgba(209, 92, 99, 0.12)",
+        "accent_soft": "rgba(76, 94, 196, 0.10)",
+        "danger_soft": "rgba(192, 55, 62, 0.10)",
         "grid": "rgba(39, 43, 51, 0.06)",
-        "outage_band": "rgba(116, 123, 136, 0.10)",
-        # neumorphic shadow pair -- dark to the bottom-right, light to the top-left
-        "shadow_dark": "#C5CAD3",
+        "outage_band": "rgba(116, 123, 136, 0.08)",
+        # flat elevation: a single soft drop shadow, used sparingly with the border
+        "shadow_dark": "#E3E7ED",
         "shadow_light": "#FFFFFF",
-        "shadow": "6px 6px 14px #C5CAD3, -6px -6px 14px #FFFFFF",
-        "shadow_hover": "9px 9px 22px #BCC2CC, -9px -9px 22px #FFFFFF",
-        "shadow_sm": "3px 3px 7px #CBD0D9, -3px -3px 7px #FFFFFF",
-        "shadow_inset": "inset 4px 4px 9px #C5CAD3, inset -4px -4px 9px #FFFFFF",
-        "shadow_inset_sm": "inset 2px 2px 5px #CBD0D9, inset -2px -2px 5px #FFFFFF",
+        "shadow": "0 1px 2px rgba(23,27,35,0.04), 0 2px 6px rgba(23,27,35,0.05)",
+        "shadow_hover": "0 2px 5px rgba(23,27,35,0.07), 0 8px 20px rgba(23,27,35,0.08)",
+        "shadow_sm": "0 1px 2px rgba(23,27,35,0.05)",
+        "shadow_inset": "none",
+        "shadow_inset_sm": "none",
         # a quiet single-hue gradient, reserved for the one primary CTA / fills
         "gradient": "linear-gradient(135deg, #4C5EC4 0%, #3E4FB0 100%)",
         "gradient_soft": "linear-gradient(135deg, rgba(76,94,196,0.10), rgba(62,79,176,0.08))",
@@ -62,10 +63,10 @@ PALETTES: dict[str, dict[str, str]] = {
         "cat5": "#B06A66",  # muted terracotta
     },
     "dark": {
-        "bg": "#23262F",
+        "bg": "#1B1E27",
         "surface": "#23262F",
         "surface_2": "#2A2E39",
-        "panel": "#2E323F",
+        "panel": "#2A2E39",
         "panel_border": "#3A3F4E",
         "border": "#333845",
         "text": "#E6E8EE",
@@ -74,17 +75,17 @@ PALETTES: dict[str, dict[str, str]] = {
         "danger": "#E07179",
         "caution": "#E0A54A",
         "ok": "#4FB39E",
-        "accent_soft": "rgba(120, 134, 230, 0.16)",
-        "danger_soft": "rgba(224, 113, 121, 0.16)",
+        "accent_soft": "rgba(120, 134, 230, 0.14)",
+        "danger_soft": "rgba(224, 113, 121, 0.14)",
         "grid": "rgba(230, 232, 238, 0.08)",
-        "outage_band": "rgba(137, 144, 160, 0.12)",
-        "shadow_dark": "#171A21",
+        "outage_band": "rgba(137, 144, 160, 0.10)",
+        "shadow_dark": "#15171E",
         "shadow_light": "#2F3440",
-        "shadow": "6px 6px 14px #171A21, -6px -6px 14px #2F3440",
-        "shadow_hover": "9px 9px 22px #12141A, -9px -9px 22px #333845",
-        "shadow_sm": "3px 3px 7px #1B1E26, -3px -3px 7px #2C313C",
-        "shadow_inset": "inset 4px 4px 9px #171A21, inset -4px -4px 9px #2F3440",
-        "shadow_inset_sm": "inset 2px 2px 5px #1B1E26, inset -2px -2px 5px #2C313C",
+        "shadow": "0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.30)",
+        "shadow_hover": "0 2px 6px rgba(0,0,0,0.40), 0 10px 24px rgba(0,0,0,0.40)",
+        "shadow_sm": "0 1px 2px rgba(0,0,0,0.35)",
+        "shadow_inset": "none",
+        "shadow_inset_sm": "none",
         "gradient": "linear-gradient(135deg, #3E4AA8 0%, #333E96 100%)",
         "gradient_soft": "linear-gradient(135deg, rgba(120,134,230,0.16), rgba(90,104,200,0.12))",
         "cat1": "#7886E6",
