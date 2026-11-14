@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.config import Config, ControllerMode
 from engine.devices import build_devices
 from engine.grid import FeederModel
+from engine.loadflow import nema_vuf, solve_feeder
 from engine.montecarlo import run_sweep
 from engine.pacer_core import PacerController
 from engine.simulation import run_trial, scenario_structure
@@ -143,6 +144,41 @@ def test_run_sweep_is_deterministic_and_ordered() -> None:
     assert sw.rate_pct == sw2.rate_pct and sw.peak_pu == sw2.peak_pu
 
 
+def test_nema_vuf_hand_case() -> None:
+    """NEMA MG 1: mean 234 V, worst deviation 6 V -> 2.564% unbalance."""
+    assert abs(nema_vuf([240.0, 228.0, 234.0]) - 6.0 / 234.0 * 100.0) < 1e-9
+    assert nema_vuf([230.0, 230.0, 230.0]) == 0.0
+
+
+def test_loadflow_neutral_rises_with_imbalance() -> None:
+    """Four-wire sweep (Phase 1): a balanced population draws ~no source neutral
+    current; piling load onto one phase makes |I_n| rise monotonically. Converges."""
+    n = 30
+    home_phase = np.arange(n) % 3  # 10 homes per phase, interleaved
+    r = 0.004
+    z_seg = np.full(n, r + 1j * 0.4 * r)  # LV cable, X/R = 0.4
+    z_src = 0.01 + 1j * 0.05  # transformer, X/R = 5
+    tan_phi = float(np.tan(np.arccos(0.90)))
+
+    def neutral(load_w):
+        sol = solve_feeder(home_phase, z_seg, z_seg, z_src, z_src,
+                           load_w, load_w * tan_phi, 0.0, 0.0, 240.0)
+        assert sol.converged
+        return abs(sol.i_neutral_src), abs(sol.i_phase_src[0])
+
+    base = np.full(n, 800.0)  # W per home
+    i_bal, i_phase = neutral(base)
+    assert i_bal < 0.2 * i_phase  # balanced -> neutral far below a phase current
+
+    prev = i_bal
+    for extra in (1.5, 2.5, 4.0):
+        load = base.copy()
+        load[home_phase == 0] *= extra
+        cur, _ = neutral(load)
+        assert cur > prev
+        prev = cur
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -151,6 +187,8 @@ def _run_standalone() -> int:
         test_fault_probability_validation,
         test_scenario_structure_reconciles,
         test_run_sweep_is_deterministic_and_ordered,
+        test_nema_vuf_hand_case,
+        test_loadflow_neutral_rises_with_imbalance,
     ]
     failed = 0
     for t in tests:
