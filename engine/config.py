@@ -117,6 +117,10 @@ class Config:
     # golden). high_fidelity_inrush sub-steps the fuse at 1 s for 5 min post-restore.
     model_inrush: bool = False
     high_fidelity_inrush: bool = False
+    # Opt-in: three independent per-phase winding hot-spots over a shared top-oil
+    # (engine/thermal.py), feeding the Beacon real per-phase physics instead of the
+    # current-share proxy. Default False keeps the single-hot-spot model (golden).
+    per_phase_thermal: bool = False
 
     # --- event timeline (minutes) ----------------------------------------------
     warmup_minutes: int = 180  # normal operation before the cut (learner trains here)
@@ -217,6 +221,7 @@ class Config:
             *(("gg",) if self.fuse_iec_gg else ()),
             *(("inr",) if self.model_inrush else ()),
             *(("hfi",) if self.high_fidelity_inrush else ()),
+            *(("ppt",) if self.per_phase_thermal else ()),
         )
 
     def with_mode(self, mode: ControllerMode) -> "Config":

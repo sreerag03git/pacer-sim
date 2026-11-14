@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 3 — per-phase thermal + safety thresholds
+
+**Three independent per-phase winding hot-spots over a shared top-oil**
+(`engine/thermal.py` `PerPhaseIECThermal`, same IEC 60076-7 equations per phase).
+Opt-in via `Config.per_phase_thermal` (default **False** = single-hot-spot model,
+byte-identical golden). When on, the Beacon is fed real per-phase hot-spots instead
+of the current-share proxy, and worst-phase ageing is reported. New outputs:
+`hot_spot_phase_c` series and `peak_hot_spot_c`. A seed-7 run shows the Beacon
+cutting per-phase hot-spot spread from ~36 C (lockstep baseline) to ~14 C — the
+per-phase evidence the single-hot-spot model could not surface.
+
+**IEC 60076-7 safety thresholds** (always on, observational): minutes with hot-spot
+> 140 C (advisory) and > 160 C (bubbling / gas risk), as `minutes_hs_over_140` /
+`minutes_hs_over_160`. Zero at the 42 C default (peak ~113 C); they fire in hotter
+or more overloaded scenarios.
+
 ## Phase 2 — motor inrush + real fuse (in progress)
 
 **Locked-rotor motor inrush** (`engine/simulation.py`, `engine/fuse.py`). Opt-in

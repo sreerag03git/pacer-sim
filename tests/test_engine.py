@@ -24,6 +24,7 @@ from engine.loadflow import nema_vuf, solve_feeder
 from engine.montecarlo import run_sweep
 from engine.pacer_core import PacerController
 from engine.simulation import run_trial, scenario_structure
+from engine.thermal import IECThermalModel, PerPhaseIECThermal
 from engine.thermal import (
     IECThermalModel,
     IEEEThermalModel,
@@ -239,6 +240,30 @@ def test_inrush_bites_lockstep_not_staggered() -> None:
     assert np.array_equal(run_trial(hf, 0).phase_heat_pct, run_trial(hf, 0).phase_heat_pct)
 
 
+def test_per_phase_thermal_and_safety_flags() -> None:
+    """per_phase_thermal gives three independent hot-spots that diverge under
+    imbalance (worst phase reported); safety-threshold minute counts are
+    observational; the scalar path reproduces the single-phase model; deterministic.
+    Default (off) is byte-for-byte covered by the golden."""
+    cfg = Config(seed=7, per_phase_thermal=True).with_mode(ControllerMode.PACER_BEACON)
+    t = run_trial(cfg, 0)
+    assert t.hot_spot_phase_c.shape == (t.total_minutes, 3)
+    spread = float((t.hot_spot_phase_c.max(axis=1) - t.hot_spot_phase_c.min(axis=1)).max())
+    assert spread > 0.5  # phases load unequally -> hot-spots diverge
+    assert abs(t.peak_hot_spot_c - float(t.hot_spot_phase_c.max())) < 1e-6  # worst phase
+    assert t.minutes_hs_over_140 >= 0 and t.minutes_hs_over_160 >= 0
+    assert np.array_equal(t.hot_spot_phase_c, run_trial(cfg, 0).hot_spot_phase_c)  # deterministic
+
+    # equal phases -> the per-phase model reproduces the single-phase model exactly
+    a, b = IECThermalModel(), PerPhaseIECThermal()
+    a.reset(40.0)
+    b.reset(40.0)
+    for _ in range(80):
+        a.step(1.3, 42.0, 1.0)
+        b.step(1.3, 42.0, 1.0)
+    assert abs(a.hot_spot_c - b.hot_spot_c) < 1e-9 and abs(a.ageing_hours - b.ageing_hours) < 1e-9
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -252,6 +277,7 @@ def _run_standalone() -> int:
         test_reactance_path_outputs_and_determinism,
         test_fuse_gg_fit_and_tcc,
         test_inrush_bites_lockstep_not_staggered,
+        test_per_phase_thermal_and_safety_flags,
     ]
     failed = 0
     for t in tests:

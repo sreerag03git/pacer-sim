@@ -25,7 +25,7 @@ from engine.devices import build_devices
 from engine.fuse import FuseBank, fit_gg_params
 from engine.grid import FeederModel
 from engine.pacer_core import PacerController
-from engine.thermal import IECThermalModel, RoomModel, RoomParams, ambient_series
+from engine.thermal import IECThermalModel, PerPhaseIECThermal, RoomModel, RoomParams, ambient_series
 
 # Reservoir thermostat deadband: demand saturates once the store is >15% depleted.
 _RESERVOIR_DEADBAND = 0.15
@@ -93,8 +93,13 @@ class TrialResult:
     vuf_pct: np.ndarray = field(default_factory=lambda: np.zeros(0), repr=False)
     peak_neutral_a: float = 0.0
     max_vuf_pct: float = 0.0
+    # per-phase thermal (zero/empty unless config.per_phase_thermal) + safety thresholds
+    hot_spot_phase_c: np.ndarray = field(default_factory=lambda: np.zeros(0), repr=False)
+    peak_hot_spot_c: float = 0.0
+    minutes_hs_over_140: int = 0  # IEC 60076-7 advisory threshold
+    minutes_hs_over_160: int = 0  # IEC 60076-7 bubbling / gas-risk threshold
 
-    APPLIANCE_LABELS = ("Inverter AC", "Fixed AC", "Inverter charger", "E-rickshaw", "Water pump", "Base load")
+    APPLIANCE_LABELS =("Inverter AC", "Fixed AC", "Inverter charger", "E-rickshaw", "Water pump", "Base load")
 
     def scalar_summary(self) -> dict:
         """Compact, order-stable dict of the scalar outcomes (used for hashing)."""
@@ -140,7 +145,7 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     rooms.reset(amb[0], scenario_rng)
     reservoir_x = dev.reservoir_x0.copy()
 
-    thermal = IECThermalModel()
+    thermal = PerPhaseIECThermal() if cfg.per_phase_thermal else IECThermalModel()
     thermal.reset(amb[0])
     fuse = FuseBank(cfg.fuse_current_a, params=fit_gg_params() if cfg.fuse_iec_gg else None)
     fuse.reset(np.zeros(cfg.phases))  # heat up from cold during warm-up
@@ -170,6 +175,7 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
     ts_stress = np.zeros(T)
     ts_ineutral = np.zeros(T)  # source neutral current (A); nonzero only with use_reactance
     ts_vuf = np.zeros(T)  # NEMA voltage unbalance (%); nonzero only with use_reactance
+    ts_hs_phase = np.zeros((T, cfg.phases))  # per-phase hot-spot (C); per_phase_thermal only
     kind_masks = [dev.kind == k for k in range(5)]
 
     rep_home = feeder.representative_home()
@@ -298,7 +304,11 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
             fuse.step(phase_i, t, dt)
         apparent_kva = home_power.sum() / cfg.power_factor
         load_pu = apparent_kva / cfg.nameplate_kva
-        thermal.step(load_pu, ambient_c, dt)
+        if cfg.per_phase_thermal:
+            thermal.step_phases(load_pu, phase_i / cfg.rated_phase_current_a, ambient_c, dt)
+            ts_hs_phase[t] = thermal.hot_spot_phase_c
+        else:
+            thermal.step(load_pu, ambient_c, dt)
 
         ac_duty_room = np.zeros(dev.n_rooms)
         if dev.n_rooms:
@@ -325,11 +335,14 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
                 )
                 beacon.observe(v_home_eff[dev.home], v_phase_ref)
 
-        # per-phase hot-spot proxy for the Beacon next minute (shared hot-spot,
-        # scaled by each phase's share of the load).
-        mean_i = max(phase_i.mean(), 1e-6)
-        hs_rise = max(thermal.hot_spot_c - ambient_c, 0.0)
-        hs_phase_prev = ambient_c + hs_rise * (phase_i / mean_i)
+        # Per-phase hot-spot for the Beacon next minute: real per-phase physics when
+        # enabled, else the current-share proxy (shared hot-spot scaled by load share).
+        if cfg.per_phase_thermal:
+            hs_phase_prev = thermal.hot_spot_phase_c.copy()
+        else:
+            mean_i = max(phase_i.mean(), 1e-6)
+            hs_rise = max(thermal.hot_spot_c - ambient_c, 0.0)
+            hs_phase_prev = ambient_c + hs_rise * (phase_i / mean_i)
         phase_i_prev = phase_i
         fuse_heat_prev = fuse.heat_percent()
 
@@ -415,6 +428,10 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         vuf_pct=ts_vuf,
         peak_neutral_a=float(ts_ineutral.max()),
         max_vuf_pct=float(ts_vuf.max()),
+        hot_spot_phase_c=ts_hs_phase,
+        peak_hot_spot_c=float(ts_hs.max()),
+        minutes_hs_over_140=int(np.count_nonzero(ts_hs > 140.0)),
+        minutes_hs_over_160=int(np.count_nonzero(ts_hs > 160.0)),
     )
 
 

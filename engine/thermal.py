@@ -150,6 +150,60 @@ class IECThermalModel(TransformerThermalModel):
         self.hot_spot_c = ambient_c + self._theta_o + delta_h
 
 
+class PerPhaseIECThermal(TransformerThermalModel):
+    """IEC 60076-7 with a shared top-oil but three *independent* per-phase winding
+    hot-spots, each driven by its own phase current -- so the Beacon's per-phase
+    control is backed by per-phase physics, not a current-share proxy. The oil is
+    shared (one tank); the winding gradient is per phase. ``hot_spot_c`` and
+    ``ageing_hours`` report the worst phase; ``hot_spot_phase_c`` is the array.
+    The scalar ``step`` (equal phases) reproduces the single-phase model exactly.
+    """
+
+    def __init__(self, n_phases: int = 3, params: IECThermalParams | None = None) -> None:
+        self.p = params or IECThermalParams()
+        self.n = n_phases
+        self._theta_o = 0.0
+        self._theta_h1 = np.zeros(n_phases)
+        self._theta_h2 = np.zeros(n_phases)
+        self._ageing_phase = np.zeros(n_phases)
+        self.top_oil_c = 0.0
+        self.hot_spot_phase_c = np.zeros(n_phases)
+        self.hot_spot_c = 0.0
+        self.ageing_hours = 0.0
+
+    def reset(self, ambient_c: float) -> None:
+        p = self.p
+        k0 = 0.75
+        self._theta_o = p.delta_theta_or * ((1 + p.R * k0 * k0) / (1 + p.R)) ** p.x
+        self._theta_h1[:] = p.delta_theta_hr * k0 ** p.y
+        self._theta_h2[:] = 0.0
+        self._ageing_phase[:] = 0.0
+        self._recompute(ambient_c)
+        self.ageing_hours = 0.0
+
+    def step(self, load_pu: float, ambient_c: float, dt_min: float) -> None:
+        self.step_phases(load_pu, np.full(self.n, load_pu), ambient_c, dt_min)
+
+    def step_phases(self, load_pu_total: float, k_phase, ambient_c: float, dt_min: float) -> None:
+        p = self.p
+        k = max(load_pu_total, 0.0)
+        kp = np.maximum(np.asarray(k_phase, dtype=float), 0.0)
+        steady_oil = p.delta_theta_or * ((1 + p.R * k * k) / (1 + p.R)) ** p.x
+        self._theta_o += (dt_min / (p.k11 * p.tau_o)) * (steady_oil - self._theta_o)
+        steady_grad = p.delta_theta_hr * kp ** p.y
+        self._theta_h1 += (dt_min / (p.k22 * p.tau_w)) * (p.k21 * steady_grad - self._theta_h1)
+        self._theta_h2 += (dt_min / (p.tau_o / p.k22)) * ((p.k21 - 1.0) * steady_grad - self._theta_h2)
+        self._recompute(ambient_c)
+        v = 2.0 ** ((self.hot_spot_phase_c - p.hot_spot_reference_c) / p.ageing_halving_k)
+        self._ageing_phase += v * (dt_min / 60.0)
+        self.ageing_hours = float(self._ageing_phase.max())
+
+    def _recompute(self, ambient_c: float) -> None:
+        self.top_oil_c = ambient_c + self._theta_o
+        self.hot_spot_phase_c = ambient_c + self._theta_o + (self._theta_h1 - self._theta_h2)
+        self.hot_spot_c = float(self.hot_spot_phase_c.max())
+
+
 class IEEEThermalModel(TransformerThermalModel):
     """IEEE C57.91 clause-7 top-oil + hot-spot model (alternative standard).
 
