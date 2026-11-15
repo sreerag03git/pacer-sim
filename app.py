@@ -629,7 +629,10 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
 def _do_run(config: Config) -> None:
     holder = st.empty()
     with holder.container():
-        st.markdown("Running Monte Carlo across all three modes...")
+        st.markdown('<div class="pacer-loading"><div class="ring"></div>'
+                    '<h3>Running the analysis</h3>'
+                    '<p class="msg">Simulating three controllers across the Monte Carlo set&hellip;</p></div>',
+                    unsafe_allow_html=True)
         bar = st.progress(0.0, text="Starting")
         last = {"bucket": -1}
 
@@ -965,6 +968,55 @@ def _mode_bar(theme, valuef, title, ytitle, height=300):
     return fig
 
 
+def _scene_axis(sem):
+    return dict(backgroundcolor="rgba(0,0,0,0)", showbackground=True,
+                gridcolor=sem["grid"], zerolinecolor=sem["grid"], color=sem["muted"])
+
+
+def _fig_3d_mode_compare(trials, theme):
+    """The three controllers' worst-phase load as 3D ribbons, with the fuse-melt
+    plane: baseline spikes through it; PACER and the Beacon stay beneath."""
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    ref = trials["baseline"]
+    x = _time_axis(ref)
+    fig = themed_figure(theme, height=460)
+    for i, mv in enumerate(_MODE_ORDER):
+        z = trials[mv].phase_load_pu.max(axis=1)
+        fig.add_trace(go.Scatter3d(x=x, y=[i] * len(x), z=z, mode="lines",
+                                   line=dict(color=mcl[mv], width=6), name=_MODE_LABEL[mv]))
+    xr = [float(x.min()), float(x.max())]
+    yr = [-0.3, len(_MODE_ORDER) - 0.7]
+    fig.add_trace(go.Surface(x=xr, y=yr, z=[[_FUSE_MELT_PU, _FUSE_MELT_PU], [_FUSE_MELT_PU, _FUSE_MELT_PU]],
+                             showscale=False, opacity=0.16, name="fuse melts",
+                             colorscale=[[0, sem["danger"]], [1, sem["danger"]]], hoverinfo="skip"))
+    fig.update_layout(title="Worst-phase load, three controllers (3D)", margin=dict(l=0, r=0, t=36, b=0),
+                      scene=dict(xaxis=dict(title="minutes from restoration", **_scene_axis(sem)),
+                                 yaxis=dict(title="", tickvals=list(range(len(_MODE_ORDER))),
+                                            ticktext=[_MODE_LABEL[mv] for mv in _MODE_ORDER], **_scene_axis(sem)),
+                                 zaxis=dict(title="load x rating", **_scene_axis(sem)),
+                                 camera=dict(eye=dict(x=1.7, y=-1.5, z=0.8))))
+    return fig
+
+
+def _fig_3d_restore_surface(trials, theme):
+    """The restart load building up by appliance type over time, as a 3D surface
+    (baseline). Shows which loads drive the surge and when."""
+    sem = semantic(theme)
+    tr = trials["baseline"]
+    x = _time_axis(tr)
+    labels = list(TrialResult.APPLIANCE_LABELS)
+    fig = themed_figure(theme, height=460)
+    fig.add_trace(go.Surface(x=x, y=list(range(len(labels))), z=tr.appliance_load_kw.T,
+                             colorscale="Viridis", showscale=True, colorbar=dict(title="kW", thickness=10)))
+    fig.update_layout(title="Restart load by appliance type (3D surface, baseline)", margin=dict(l=0, r=0, t=36, b=0),
+                      scene=dict(xaxis=dict(title="minutes from restoration", **_scene_axis(sem)),
+                                 yaxis=dict(title="", tickvals=list(range(len(labels))), ticktext=labels, **_scene_axis(sem)),
+                                 zaxis=dict(title="served kW", **_scene_axis(sem)),
+                                 camera=dict(eye=dict(x=1.8, y=-1.6, z=0.9))))
+    return fig
+
+
 def _sim_overview(active, theme):
     mc = active["mc"]
     config = active["config"]
@@ -991,6 +1043,23 @@ def _sim_overview(active, theme):
                         width='stretch', theme=None, config=_chart_config())
     st.caption("Baseline restarts in lockstep (~2x). PACER staggers and softens the surge; the Beacon adds a "
                "per-phase fuse ceiling. Every view below dissects the same scenario.")
+    c3, c4 = st.columns(2)
+    with c3:
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.homes_online,
+                                 "Homes online through the restart", "homes powered"),
+                        width='stretch', theme=None, config=_chart_config())
+    with c4:
+        st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_peak_pu,
+                                  "Mean peak load vs rating", "x rating"),
+                        width='stretch', theme=None, config=_chart_config())
+    _kicker("Three controllers in 3D")
+    d1, d2 = st.columns(2)
+    with d1:
+        st.plotly_chart(_fig_3d_mode_compare(trials, theme), width='stretch', theme=None, config=_chart_config())
+    with d2:
+        st.plotly_chart(_fig_3d_restore_surface(trials, theme), width='stretch', theme=None, config=_chart_config())
+    st.caption("The 3D ribbons trace each controller's worst-phase load over the restart; baseline pierces the fuse-melt "
+               "plane while PACER and the Beacon stay beneath it. The surface shows which appliances drive the surge.")
     _back_to_top()
 
 

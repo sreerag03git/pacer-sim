@@ -231,6 +231,14 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-foot { color: var(--muted); font-size: 0.76rem; margin-top: 2.2rem; padding-top: 0.9rem;
   font-family: 'JetBrains Mono', monospace; border-top: 1px solid var(--border); }
 
+/* Loading screen (shown while the opening analysis runs) */
+.pacer-loading { text-align: center; padding: 3.2rem 1rem 1.6rem; }
+.pacer-loading .ring { width: 52px; height: 52px; margin: 0 auto 1.2rem; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent); animation: pacer-spin 0.9s linear infinite; }
+@keyframes pacer-spin { to { transform: rotate(360deg); } }
+.pacer-loading h3 { font-size: 1.15rem; margin: 0 0 0.25rem; }
+.pacer-loading .msg { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; margin: 0; }
+
 /* Skip + back-to-top */
 .pacer-skip { position: absolute; left: -999px; top: 0; background: var(--accent); color: #fff; padding: 0.4rem 0.7rem; border-radius: 0 0 var(--radius-sm) 0; z-index: 2000; }
 .pacer-skip:focus { left: 0; }
