@@ -71,6 +71,8 @@ SWEEP_RANGES: dict[str, list[float]] = {
     "outage_minutes": [30, 60, 90, 120, 180, 240],
     "nameplate_kva": [120.0, 140.0, 160.0, 180.0, 200.0, 240.0],
     "vulnerable_fraction": [0.00, 0.05, 0.10, 0.20, 0.30],
+    "module_adoption": [0.00, 0.25, 0.50, 0.75, 1.00],  # Phase 4 coverage sweep
+    "fault_probability": [0.00, 0.05, 0.10, 0.20, 0.30],  # Phase 4 fault sweep
 }
 
 st.set_page_config(page_title="PACER-Sim", layout="wide", initial_sidebar_state="expanded")
@@ -149,6 +151,7 @@ _SCENARIO_DEFAULTS = dict(
     sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=200, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
     sc_reactance=False, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,
+    sc_adoption=100, sc_spoofbeacon=False, sc_estnoise=False,
 )
 
 
@@ -546,7 +549,9 @@ def _build_config_from_state() -> tuple[Config, HeatwavePreset, float | None]:
         fuse_tightness=float(ss.sc_tight), outage_minutes=int(ss.sc_outage), heatwave=heatwave,
         ambient_peak_c=custom_peak, mc_runs=int(ss.sc_runs), seed=int(ss.sc_seed),
         use_reactance=bool(ss.sc_reactance), fuse_iec_gg=bool(ss.sc_fusegg),
-        model_inrush=bool(ss.sc_inrush), per_phase_thermal=bool(ss.sc_ppthermal))
+        model_inrush=bool(ss.sc_inrush), per_phase_thermal=bool(ss.sc_ppthermal),
+        module_adoption=ss.sc_adoption / 100.0, beacon_spoofed=bool(ss.sc_spoofbeacon),
+        estimator_noise_ohm=(0.01 if ss.sc_estnoise else 0.0))
     return config, heatwave, custom_peak
 
 
@@ -585,12 +590,18 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         st.slider("Base load per home (kW)", 0.05, 0.50, step=0.01, key="sc_baseload")
         st.slider("Device fault probability (%)", 0, 20, key="sc_faultprob",
                   help="Faulted devices fall back to pass-through, as if PACER were absent.")
+        st.slider("Module adoption (%)", 0, 100, key="sc_adoption",
+                  help="Homes with a PACER Module fitted; the rest run pass-through.")
     with sb.expander("Advanced physics (opt-in, changes results)"):
         st.caption("Off by default so the headline reproduces the validated figures.")
         st.checkbox("Four-wire load flow (R+jX, neutral current, VUF)", key="sc_reactance")
         st.checkbox("IEC 60269 gG fuse calibration", key="sc_fusegg")
         st.checkbox("Motor locked-rotor inrush", key="sc_inrush")
         st.checkbox("Per-phase winding hot-spots", key="sc_ppthermal")
+        st.checkbox("Spoofed Beacon (too-high caps)", key="sc_spoofbeacon",
+                    help="A cap can only reduce load, so a spoof collapses to PACER-only.")
+        st.checkbox("Correlated estimator noise (Rule 4)", key="sc_estnoise",
+                    help="Confounds dV/dI when the whole population steps together.")
     sb.markdown("###### Monte Carlo")
     sb.slider("Trials per mode", 10, 500, step=10, key="sc_runs")
     sb.number_input("Random seed", 0, 1_000_000, step=1, key="sc_seed")
@@ -1306,6 +1317,25 @@ def _sim_assimilation(active, theme):
     else:
         st.caption("Pick a variable and press Run sweep to trace how blow-outs respond as it changes, holding "
                    "everything else fixed -- a clean, un-rigged sensitivity curve.")
+
+    st.markdown("#### Robustness -- a spoofed Beacon cannot make things worse")
+    from dataclasses import replace
+    si = int(st.session_state.sim_trial)
+    sem = semantic(theme)
+    pac = _compute_trial(config, ControllerMode.PACER.value, si)
+    bea = _compute_trial(config, ControllerMode.PACER_BEACON.value, si)
+    spf = _compute_trial(replace(config, beacon_spoofed=True), ControllerMode.PACER_BEACON.value, si)
+    fig = themed_figure(theme, height=300)
+    fig.add_trace(go.Bar(x=["PACER only", "PACER + Beacon", "Beacon spoofed"],
+                         y=[pac.peak_pu, bea.peak_pu, spf.peak_pu], width=0.5,
+                         marker_color=[mcl["pacer"], mcl["pacer_beacon"], sem["danger"]]))
+    fig.add_hline(y=_FUSE_MELT_PU, line=dict(color=sem["danger"], width=1, dash="dot"),
+                  annotation_text="fuse melts", annotation_font=dict(color=sem["danger"], size=10))
+    fig.update_layout(title="Peak load vs rating (representative trial)", yaxis_title="x rating", showlegend=False)
+    st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
+    st.caption("A Beacon broadcasting deliberately too-high caps collapses to PACER-only: a cap can only *reduce* a "
+               "device's load, so a spoofed or compromised Beacon cannot push the restart past the no-Beacon case. "
+               f"Spoofed peak {spf.peak_pu:.2f}x matches PACER-only {pac.peak_pu:.2f}x.")
     _back_to_top()
 
 
