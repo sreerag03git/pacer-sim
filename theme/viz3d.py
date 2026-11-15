@@ -58,7 +58,7 @@ def transformer_thermal_3d(temps_c, theme, ambient_c=40.0):
                                 cmin=cmin, cmax=cmax, showscale=(i == 0),
                                 name=f"winding {labels[i]}: {temps[i]:.0f} C"))
         fig.add_trace(go.Scatter3d(x=[cx], y=[cy], z=[4.7], mode="text",
-                                   text=[f"&#966;{labels[i]} {temps[i]:.0f}&#176;C"],
+                                   text=[f"φ{labels[i]} {temps[i]:.0f}°C"],
                                    textfont=dict(color=sem["text"], size=12), showlegend=False, hoverinfo="skip"))
 
     hot = labels[int(np.argmax(temps))]
