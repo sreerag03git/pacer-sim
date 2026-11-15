@@ -144,19 +144,18 @@ class PacerController:
                     z_sample,
                     np.nan,
                 )
-                rec = qualifies & np.isfinite(z_sample)
-                idx = np.nonzero(rec)[0]
-                for d in idx:
-                    self._z_ring[d, self._z_ptr[d]] = z_sample[d]
-                    self._z_ptr[d] = (self._z_ptr[d] + 1) % self.p.z_ring_size
-                    self._z_cnt[d] = min(self._z_cnt[d] + 1, self.p.z_ring_size)
-                have = self._z_cnt > 0
-                if np.any(have):
-                    # Median only over rows that actually hold samples (avoids an
-                    # all-NaN-slice warning for devices with no step yet).
-                    med = np.full(self.D, np.nan)
-                    med[have] = np.nanmedian(self._z_ring[have], axis=1)
-                    self._z_est = np.where(have & np.isfinite(med), med, self._z_est)
+                idx = np.nonzero(qualifies & np.isfinite(z_sample))[0]
+                if idx.size:
+                    # Vectorised circular-buffer write for the devices that stepped,
+                    # then recompute the median only for *those* rows -- an unchanged
+                    # ring yields the same median, so z_est stays byte-identical.
+                    ptr = self._z_ptr[idx]
+                    self._z_ring[idx, ptr] = z_sample[idx]
+                    self._z_ptr[idx] = (ptr + 1) % self.p.z_ring_size
+                    self._z_cnt[idx] = np.minimum(self._z_cnt[idx] + 1, self.p.z_ring_size)
+                    med = np.nanmedian(self._z_ring[idx], axis=1)
+                    good = np.isfinite(med)
+                    self._z_est[idx[good]] = med[good]
 
         self._prev_v = v_home.copy()
         self._prev_i = i_dev.copy()
