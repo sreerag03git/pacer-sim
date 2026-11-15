@@ -28,6 +28,7 @@ from engine.montecarlo import (
     run_sweep,
 )
 from engine.simulation import TrialResult, run_trial, scenario_structure
+from engine.stats import two_proportion_z_test
 from theme import diagrams, phase_colors, semantic, theme_css, themed_figure
 
 APP_VERSION = "0.4.0"
@@ -1438,10 +1439,119 @@ def _sim_provenance(active, theme):
 # MAIN
 # ===========================================================================
 _AREAS = ["Simulator", "Overview", "Problem & solution", "Impact & case", "Delivery", "Team & about"]
+def _beacon_marginal(pac, bea):
+    """Marginal blow-out reduction PACER-Core -> Beacon, with a 95% Wald CI and the
+    pooled two-proportion p-value."""
+    na, nb = pac.n_runs, bea.n_runs
+    pa, pb = pac.blowout_runs / na, bea.blowout_runs / nb
+    diff = pa - pb  # positive = the Beacon reduces blow-outs further
+    se = (pa * (1 - pa) / na + pb * (1 - pb) / nb) ** 0.5
+    p = two_proportion_z_test(pac.blowout_runs, na, bea.blowout_runs, nb).p_value
+    return diff, diff - 1.96 * se, diff + 1.96 * se, p
+
+
+def _sim_beacon(active, theme):
+    mc = active["mc"]
+    config = active["config"]
+    sem = semantic(theme)
+    mcl = _mode_colors(theme)
+    _kicker("Does the Beacon earn its cost? -- the honest test, not a foregone conclusion")
+    pac = mc.stats[ControllerMode.PACER]
+    bea = mc.stats[ControllerMode.PACER_BEACON]
+    diff, lo, hi, p = _beacon_marginal(pac, bea)
+    sig = (p < 0.05) and (lo > 0)
+    _stat_tiles([
+        (f"{pac.blowout_runs / pac.n_runs * 100:.1f}%", "PACER-Core blow-outs (no Beacon)", "accent"),
+        (f"{bea.blowout_runs / bea.n_runs * 100:.1f}%", "PACER + Beacon blow-outs", "accent"),
+        (f"{diff * 100:+.1f} pp", f"marginal reduction (95% CI {lo * 100:+.1f} to {hi * 100:+.1f} pp)", "ok" if sig else "muted"),
+        (f"p = {p:.3g}", "two-proportion z-test", "ok" if sig else "caution"),
+    ])
+    if sig:
+        verdict = (f"At this scenario the Beacon's extra blow-out reduction over PACER-Core <b>is</b> statistically "
+                   f"significant (p = {p:.3g}; 95% CI {lo*100:+.1f} to {hi*100:+.1f} pp). Here the Beacon earns its cost.")
+        kind = "ok"
+    else:
+        verdict = (f"At this scenario the Beacon shows <b>no</b> significant extra benefit over PACER-Core on blow-outs "
+                   f"(p = {p:.3g}; the 95% CI {lo*100:+.1f} to {hi*100:+.1f} pp includes zero). We report the wash "
+                   f"rather than tune the Beacon to look better.")
+        kind = "caution"
+    st.markdown(f'<div class="pacer-card {kind}"><h4>Verdict (auto-generated from the numbers)</h4>'
+                f'<p style="color:var(--muted)">{verdict}</p></div>', unsafe_allow_html=True)
+
+    st.markdown("#### Where (if anywhere) does the Beacon become significant?")
+    if st.button("Run the temperature sweep", width='stretch'):
+        from dataclasses import replace
+        values = SWEEP_RANGES["ambient_peak_c"]
+        base = replace(config, mc_runs=min(config.mc_runs, 60))
+        holder = st.empty()
+        with holder.container():
+            st.markdown(f"Sweeping ambient peak across {len(values)} points x 2 modes x {base.mc_runs} runs...")
+            bar = st.progress(0.0, text="Starting")
+            last = {"b": -1}
+
+            def cb(fr, msg):
+                fr = min(max(fr, 0.0), 1.0)
+                bk = int(fr * 100)
+                if bk != last["b"]:
+                    last["b"] = bk
+                    bar.progress(fr, text=msg)
+
+            sweep = run_sweep(base, "ambient_peak_c", values,
+                              modes=[ControllerMode.PACER, ControllerMode.PACER_BEACON], progress=cb)
+        holder.empty()
+        st.session_state.beacon_sweep = {"sweep": sweep, "n": base.mc_runs, "key": config.key()}
+    bs = st.session_state.get("beacon_sweep")
+    if bs and bs["key"] == config.key():
+        sweep, n = bs["sweep"], bs["n"]
+        pac_r = sweep.rate_pct[ControllerMode.PACER]
+        bea_r = sweep.rate_pct[ControllerMode.PACER_BEACON]
+        ps = [two_proportion_z_test(int(round(a / 100 * n)), n, int(round(b / 100 * n)), n).p_value
+              for a, b in zip(pac_r, bea_r)]
+        fig = themed_figure(theme, height=340)
+        fig.add_trace(go.Scatter(x=sweep.values, y=pac_r, mode="lines+markers", name="PACER-Core",
+                                 line=dict(color=mcl["pacer"], width=1.9)))
+        fig.add_trace(go.Scatter(x=sweep.values, y=bea_r, mode="lines+markers", name="PACER + Beacon",
+                                 line=dict(color=mcl["pacer_beacon"], width=1.9)))
+        sigx = [v for v, pp in zip(sweep.values, ps) if pp < 0.05]
+        sigy = [b for b, pp in zip(bea_r, ps) if pp < 0.05]
+        if sigx:
+            fig.add_trace(go.Scatter(x=sigx, y=sigy, mode="markers", name="significant (p<0.05)",
+                                     marker=dict(color=sem["ok"], size=13, symbol="star")))
+        fig.update_layout(title=f"Blow-out rate vs ambient peak ({n} runs/point)",
+                          xaxis_title="ambient peak (C)", yaxis_title="% of runs")
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
+        if not sigx:
+            st.caption("Across the swept temperatures the Beacon's extra reduction never reaches significance -- "
+                       "consistent with the headline: PACER-Core already holds the plateau below the fuse.")
+    else:
+        st.caption("Press the button to trace the Beacon's marginal benefit and its significance across temperatures.")
+
+    st.markdown("#### So what is the Beacon actually for?")
+    if config.per_phase_thermal:
+        trials = _mode_trials(config)
+        bl, bk = trials["baseline"].hot_spot_phase_c, trials["pacer_beacon"].hot_spot_phase_c
+        s_base = float((bl.max(axis=1) - bl.min(axis=1)).max())
+        s_bea = float((bk.max(axis=1) - bk.min(axis=1)).max())
+        _stat_tiles([
+            (f"{s_base:.0f} C", "worst per-phase hot-spot spread, baseline", "danger"),
+            (f"{s_bea:.0f} C", "worst per-phase hot-spot spread, Beacon", "ok"),
+            (f"{s_base - s_bea:.0f} C", "spread the Beacon removes (per-phase physics)", "ok"),
+        ])
+    st.markdown('<div class="pacer-card accent"><h4>Honest positioning</h4><ul>'
+                '<li><b>PACER-Core is the zero-infrastructure hero</b>: local and communication-free, it carries the '
+                'blow-out reduction on its own.</li>'
+                '<li><b>The Beacon is justified where the test says so</b>; where it is not, it is not a blow-out tool '
+                'but <b>per-phase thermal telemetry, fuse-heat alerting and phase-rebalancing work orders</b> -- enable '
+                '"Per-phase winding hot-spots" in the sidebar to see it cut the per-phase hot-spot spread.</li>'
+                '<li>We would rather report a wash than tune the Beacon to hit a target.</li>'
+                '</ul></div>', unsafe_allow_html=True)
+    _back_to_top()
+
+
 _SIM_VIEWS = [
     ("Overview", _sim_overview), ("Structure", _sim_structure), ("Environment", _sim_environment),
     ("Sensing", _sim_sensing), ("Detection", _sim_detection), ("Assimilation", _sim_assimilation),
-    ("Economics", _sim_economics), ("Ledger", None), ("Provenance", _sim_provenance),
+    ("Beacon", _sim_beacon), ("Economics", _sim_economics), ("Ledger", None), ("Provenance", _sim_provenance),
 ]
 
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 5 — Beacon evidence view
+
+A dedicated "Does the Beacon earn its cost?" simulator view (app-only; no engine
+change). It runs the PACER-Core vs PACER+Beacon two-proportion test on the current
+scenario and shows the marginal blow-out reduction with a 95% CI and p-value, then
+**auto-generates a one-sentence verdict from the numbers** ("significant (p=..)" or
+"no significant extra benefit; the CI includes zero"). A temperature sweep traces
+where (if anywhere) the Beacon becomes significant, starring any significant point.
+Finally it states the honest positioning: PACER-Core is the zero-infrastructure
+hero; the Beacon is justified only where the test says so, and otherwise is
+per-phase thermal telemetry + fuse-heat alerting + phase-rebalancing -- quantified
+by the per-phase hot-spot spread it removes (Phase 3) when that model is enabled.
+
 ## Phase 4 — scenario coverage + robustness (in progress)
 
 All opt-in / default to today's behaviour, so the golden fixture is byte-identical.
