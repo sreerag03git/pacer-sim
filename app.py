@@ -674,12 +674,25 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
 def _do_run(config: Config) -> None:
     holder = st.empty()
     with holder.container():
-        st.markdown('<div class="pacer-loading">'
-                    '<div class="brand">PACER<span class="dot">-</span>Sim</div>'
-                    '<div class="ring"></div>'
-                    '<h3>Preparing your results</h3>'
-                    '<p class="msg">Simulating three controllers across the Monte Carlo set&hellip;</p></div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="pacer-loading">'
+            '<div class="ring"></div>'
+            '<div class="brand">PACER<span class="dot">&middot;</span>Sim</div>'
+            '<div class="rule"></div>'
+            '<p class="tag">A standards-grounded test bench for post-blackout restart. '
+            'Built to measure the restart surge honestly, not to flatter it.</p>'
+            '<div class="cols">'
+            '<div class="col"><div class="n">01</div><h4>The problem</h4>'
+            '<p>When a load-shedding block ends, every AC and charger restarts in lockstep and the ~2&times; '
+            'surge melts the transformer fuse.</p></div>'
+            '<div class="col"><div class="n">02</div><h4>The method</h4>'
+            '<p>Seven local, communication-free rules stagger and soften each restart; an optional Beacon '
+            'adds a per-phase fuse ceiling.</p></div>'
+            '<div class="col"><div class="n">03</div><h4>The rule</h4>'
+            '<p>Every number is computed here from a deterministic, standards-grounded engine. '
+            'Reproducible, and nothing is asserted.</p></div>'
+            '</div></div>',
+            unsafe_allow_html=True)
         bar = st.progress(0.0, text="Starting")
         last = {"bucket": -1}
 
