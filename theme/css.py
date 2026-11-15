@@ -72,8 +72,12 @@ a:hover { text-decoration: underline; }
 /* Sidebar -- flat, a single hairline divider */
 [data-testid="stSidebar"] { background: var(--surface); border-right: 1px solid var(--border); }
 [data-testid="stSidebar"] .block-container { padding-top: 1rem; }
-[data-testid="stSidebar"] h3 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.09em;
-  color: var(--muted); font-family: 'Inter', sans-serif; font-weight: 600; }
+/* config hierarchy: h3 = group (prominent, separated), h6 = sub-group (quiet) */
+[data-testid="stSidebar"] h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text); font-family: 'Inter', sans-serif; font-weight: 700; margin: 1.2rem 0 0.4rem; }
+[data-testid="stSidebar"] h6 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); font-weight: 600; margin: 0.75rem 0 0.1rem; }
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p { font-size: 0.86rem; }
 
 /* Sidebar nav: a flat menu; the active item is tinted with an accent marker */
 [data-testid="stSidebar"] div[role="radiogroup"] { gap: 0.15rem; }
