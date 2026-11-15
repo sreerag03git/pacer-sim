@@ -1,5 +1,22 @@
 # Changelog
 
+## Phase 7 — credibility & export
+
+A new "Credibility" section (app-only):
+- **Reproduce a deck figure** — pick a deck slide-9 cell; the app runs that exact
+  scenario (fuse tightness + ambient) in the engine and shows the engine's number
+  beside the deck's, with the delta. Reinforces that the deck figures are a sanity
+  check, never a fit target.
+- **Assumptions register** — every assumed value in a table, separated from the
+  computed results, plus a tornado chart of the impact estimate's sensitivity to
+  each economic assumption.
+- **Hardware / BoM / firmware appendix** — real parts (STM32/ESP32, 30 A AC-3
+  relay, ZMPT101B, SX126x LoRa on the 865-867 MHz India ISM band), the
+  HMAC + rolling-counter signing/replay scheme, and a documented hardware-in-the-
+  loop interface so a real MCU can drive the sim as its "grid".
+- **Judge results card export** — a one-page, self-contained HTML download of the
+  current run (headline, config, Beacon verdict, provenance).
+
 ## Phase 6 — technical + 3D visuals (in progress)
 
 New theme modules, wired into the simulator (all computed from the run, theme-aware):
