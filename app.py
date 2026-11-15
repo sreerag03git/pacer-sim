@@ -160,7 +160,7 @@ def _back_to_top() -> None:
 # ---------------------------------------------------------------------------
 _SCENARIO_DEFAULTS = dict(
     sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
-    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=100, sc_seed=7,
+    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=60, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
     sc_reactance=False, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,
     sc_adoption=100, sc_spoofbeacon=False, sc_estnoise=False,
@@ -175,6 +175,7 @@ def _init_state() -> None:
     st.session_state.setdefault("ledger", [])
     st.session_state.setdefault("sim_trial", 0)
     st.session_state.setdefault("sweep", None)
+    st.session_state.setdefault("mobile", False)
     for k, v in _SCENARIO_DEFAULTS.items():
         st.session_state.setdefault(k, v)
 
@@ -191,6 +192,25 @@ def _apply_preset(name: str) -> None:
 
 def _toggle_theme() -> None:
     st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+
+
+def _toggle_mobile() -> None:
+    st.session_state.mobile = not st.session_state.mobile
+
+
+# Injected when "Mobile view" is on: stack every column and tighten the layout to
+# a phone-width single column (also usable by real mobile users who toggle it on).
+_MOBILE_CSS = """<style>
+.block-container { max-width: 460px !important; padding-left: 14px !important; padding-right: 14px !important; }
+[data-testid="stHorizontalBlock"] { flex-direction: column !important; gap: 0.55rem !important; }
+[data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 0 !important; }
+h1 { font-size: 1.4rem !important; } .pacer-hero h1 { font-size: 1.5rem !important; }
+[data-testid="stMetricValue"], .pacer-stat .n { font-size: 1.35rem !important; }
+[data-baseweb="tab"] { padding: 0.4rem 0.6rem !important; font-size: 0.82rem !important; }
+.pacer-hero { padding: 1.3rem 1.2rem !important; }
+.pacer-build { display: none !important; }  /* hide secondary build meta on mobile */
+.stButton > button { white-space: nowrap !important; }
+</style>"""
 
 
 def _render_header(config: Config, theme: str) -> None:
@@ -212,6 +232,8 @@ def _render_header(config: Config, theme: str) -> None:
         with c3:
             label = "Switch to dark" if theme == "light" else "Switch to light"
             st.button(label, on_click=_toggle_theme, width='stretch', key="theme_btn")
+            mlabel = "Desktop view" if st.session_state.mobile else "Mobile view"
+            st.button(mlabel, on_click=_toggle_mobile, width='stretch', key="mobile_btn")
 
 
 def _footer(active: dict | None) -> None:
@@ -1156,8 +1178,9 @@ def _sim_environment(active, theme):
         fig.update_layout(title="Mean indoor temperature", yaxis_title="C", xaxis_title="minutes from restoration")
         st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
     with c2:
-        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.hot_spot_c, "Transformer hot-spot (IEC 60076-7)", "C",
-                                 hlines=[(98, "98 C rated", sem["caution"])]), width='stretch', theme=None, config=_chart_config())
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.hot_spot_c, "Transformer hot-spot (IEC 60076-7)", "hot-spot (°C)",
+                                 hlines=[(98, "98 °C rated", sem["caution"]), (140, "140 °C advisory", sem["danger"])]),
+                        width='stretch', theme=None, config=_chart_config())
     c3, c4 = st.columns(2)
     with c3:
         st.plotly_chart(_mode_bar(theme, lambda mv: mc.stats[ControllerMode(mv)].mean_minutes_above_32,
@@ -1728,6 +1751,8 @@ def main() -> None:
     _init_state()
     theme = st.session_state.theme
     st.markdown(theme_css(theme), unsafe_allow_html=True)
+    if st.session_state.mobile:
+        st.markdown(_MOBILE_CSS, unsafe_allow_html=True)
 
     sb = st.sidebar
     sb.markdown("### Navigate")

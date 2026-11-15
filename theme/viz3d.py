@@ -31,7 +31,7 @@ def _cylinder(cx, cy, r, z0, z1, *, color=None, value=None, cmin=0.0, cmax=1.0,
     return go.Surface(x=big[0], y=big[1], z=big[2], surfacecolor=np.full((2, n), value),
                       colorscale=_TEMP_SCALE, cmin=cmin, cmax=cmax, showscale=showscale,
                       opacity=opacity, name=name, hoverinfo="name",
-                      colorbar=dict(title="C", thickness=12, len=0.6))
+                      colorbar=dict(title="°C", thickness=12, len=0.6))
 
 
 def transformer_thermal_3d(temps_c, theme, ambient_c=40.0):

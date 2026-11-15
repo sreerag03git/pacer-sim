@@ -25,23 +25,27 @@ def _template(theme: str) -> go.layout.Template:
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=_FONT, color=p["text"], size=13),
         colorway=seq,
-        margin=dict(l=56, r=20, t=36, b=44),
+        margin=dict(l=58, r=22, t=50, b=46),
         xaxis=dict(
             gridcolor=p["grid"], zerolinecolor=p["grid"], linecolor=p["border"],
             tickfont=dict(family=_MONO, size=11, color=p["muted"]),
-            title=dict(font=dict(family=_FONT, size=12, color=p["muted"])),
+            title=dict(font=dict(family=_FONT, size=12, color=p["muted"]), standoff=8),
+            automargin=True,
         ),
         yaxis=dict(
             gridcolor=p["grid"], zerolinecolor=p["grid"], linecolor=p["border"],
             tickfont=dict(family=_MONO, size=11, color=p["muted"]),
-            title=dict(font=dict(family=_FONT, size=12, color=p["muted"])),
+            title=dict(font=dict(family=_FONT, size=12, color=p["muted"]), standoff=8),
+            automargin=True,
         ),
+        # title left, legend top-right on the same band -> they never overlap
         legend=dict(
-            bgcolor="rgba(0,0,0,0)", font=dict(size=11, color=p["text"]),
-            orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+            bgcolor="rgba(0,0,0,0)", font=dict(family=_FONT, size=11, color=p["muted"]),
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0,
         ),
         hoverlabel=dict(font=dict(family=_MONO, size=11), bordercolor=p["border"]),
-        title=dict(font=dict(family=_FONT, size=13, color=p["text"]), x=0, xanchor="left"),
+        title=dict(font=dict(family=_FONT, size=14, color=p["text"]),
+                   x=0, xanchor="left", y=0.98, yanchor="top"),
     )
     return tpl
 
