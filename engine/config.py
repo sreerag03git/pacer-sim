@@ -122,6 +122,20 @@ class Config:
     # current-share proxy. Default False keeps the single-hot-spot model (golden).
     per_phase_thermal: bool = False
 
+    # --- Phase 4: coverage + robustness (all default to today's behaviour) --------
+    # Fraction of homes that have a PACER Module fitted; the rest run pass-through
+    # (as if PACER were absent). 1.0 = full adoption = today's behaviour.
+    module_adoption: float = 1.0
+    # Spoofed Beacon: broadcast deliberately too-high caps. Because a cap can only
+    # *reduce* a device's own duty, a spoof cannot make things worse than PACER-only
+    # -- this flag exists to demonstrate that safety property.
+    beacon_spoofed: bool = False
+    # Correlated noise on Rule 4's self-impedance estimate: a shared-coupling term
+    # (ohm, V per aggregate-amp) that corrupts dV/dI when the whole population steps
+    # together. Default 0 keeps the estimator as-is (golden); a modest value (~0.01)
+    # stress-tests the "your estimator is too clean" critique.
+    estimator_noise_ohm: float = 0.0
+
     # --- event timeline (minutes) ----------------------------------------------
     warmup_minutes: int = 180  # normal operation before the cut (learner trains here)
     outage_minutes: int = 120  # duration of the load-shedding block
@@ -222,6 +236,9 @@ class Config:
             *(("inr",) if self.model_inrush else ()),
             *(("hfi",) if self.high_fidelity_inrush else ()),
             *(("ppt",) if self.per_phase_thermal else ()),
+            *(() if self.module_adoption >= 1.0 else (round(self.module_adoption, 6),)),
+            *(("spoof",) if self.beacon_spoofed else ()),
+            *(() if self.estimator_noise_ohm <= 0.0 else (round(self.estimator_noise_ohm, 6),)),
         )
 
     def with_mode(self, mode: ControllerMode) -> "Config":
@@ -246,6 +263,7 @@ class Config:
             ("pump penetration", self.pump_penetration),
             ("vulnerable fraction", self.vulnerable_fraction),
             ("fault probability", self.fault_probability),
+            ("module adoption", self.module_adoption),
         ):
             if not (0.0 <= val <= 1.0):
                 problems.append(f"{name} must be between 0 and 100%.")

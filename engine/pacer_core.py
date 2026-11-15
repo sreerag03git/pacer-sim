@@ -131,6 +131,10 @@ class PacerController:
             if self._have_prev:
                 di = i_dev - self._prev_i
                 dv = v_home - self._prev_v
+                # Correlated-noise stress test: a shared-coupling term that confounds
+                # dV/dI when the whole population steps together (opt-in; 0 = off).
+                if self.cfg.estimator_noise_ohm > 0.0:
+                    dv = dv - self.cfg.estimator_noise_ohm * float(di.sum())
                 qualifies = np.abs(di) > self.p.i_step_threshold_a
                 # Self-impedance from the device's own load step: Z ~ -dV/dI.
                 with np.errstate(divide="ignore", invalid="ignore"):

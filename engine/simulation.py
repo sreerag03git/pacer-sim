@@ -263,6 +263,11 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
             if beacon is not None:
                 beacon.update(m, phase_i_prev, hs_phase_prev, fuse_heat_prev)
                 beacon_caps = beacon.device_caps()
+                if cfg.beacon_spoofed:
+                    # Broadcast deliberately too-high caps. A cap can only reduce a
+                    # device's own duty, so the spoof collapses to PACER-only -- it
+                    # cannot make the restart worse. (Demonstrates the safety claim.)
+                    beacon_caps = np.full(dev.n_devices, 1.5)
             else:
                 beacon_caps = np.ones(dev.n_devices)
             v_sense = v_prev_home[dev.home]

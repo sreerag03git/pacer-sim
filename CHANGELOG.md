@@ -1,5 +1,28 @@
 # Changelog
 
+## Phase 4 — scenario coverage + robustness (in progress)
+
+All opt-in / default to today's behaviour, so the golden fixture is byte-identical.
+
+- **Coverage sweep** — `Config.module_adoption` (default 1.0): the fraction of homes
+  with a PACER Module; the rest run pass-through. Guarded so full adoption draws no
+  extra RNG. Added to `SWEEP_VARIABLES` ("Module adoption"), so the sweep tool traces
+  blow-out rate vs adoption 0..100%. Test: PACER degrades monotonically toward the
+  uncontrolled baseline as adoption falls (0% -> all blow).
+- **Fault sweep** — `fault_probability` added to `SWEEP_VARIABLES`, so the sweep tool
+  traces blow-out rate vs fault probability (exercising the pass-through rail).
+- **Spoofed Beacon** — `Config.beacon_spoofed`: the Beacon broadcasts deliberately
+  too-high caps. Because a cap can only *reduce* a device's own duty, the spoof
+  collapses to PACER-only and cannot worsen the restart. Test: spoofed `blew` /
+  `peak_pu` match PACER-only per trial -- the "signalling can only reduce load" claim.
+- **Correlated estimator noise** — `Config.estimator_noise_ohm` (default 0): a
+  shared-coupling term that confounds Rule 4's dV/dI when the whole population steps
+  together, pre-empting the "your estimator is too clean" critique. Test: the sensed
+  stress signal shifts off its clean value, deterministically.
+
+Deferred (next): the multi-day learner (trains the evening voltage bins across days)
+-- it restructures the single-day timeline, so it is its own reviewed step.
+
 ## Phase 3 — per-phase thermal + safety thresholds
 
 **Three independent per-phase winding hot-spots over a shared top-oil**

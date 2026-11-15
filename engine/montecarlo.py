@@ -29,6 +29,8 @@ SWEEP_VARIABLES: dict[str, str] = {
     "Outage duration (min)": "outage_minutes",
     "Transformer rating (kVA)": "nameplate_kva",
     "Vulnerable homes (%)": "vulnerable_fraction",
+    "Module adoption (fraction)": "module_adoption",  # Phase 4 coverage sweep
+    "Device fault probability (fraction)": "fault_probability",  # Phase 4 fault sweep
 }
 
 

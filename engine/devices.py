@@ -167,6 +167,10 @@ def build_devices(config: Config, rng: np.random.Generator) -> Devices:
     # Random hardware faults -> PACER pass-through for that device. Zero by
     # default (config.fault_probability); set it above 0 to exercise the rail.
     fault = rng.random(D) < config.fault_probability
+    # Homes without a Module also run pass-through. Guarded so full adoption (the
+    # default) draws no extra random numbers and reproduces results byte-for-byte.
+    if config.module_adoption < 1.0:
+        fault = fault | (rng.random(D) < (1.0 - config.module_adoption))
 
     return Devices(
         kind=kind,

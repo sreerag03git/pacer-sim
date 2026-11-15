@@ -21,7 +21,7 @@ from engine.devices import build_devices
 from engine.fuse import FuseBank, fit_gg_params, IEC_GG_GATES
 from engine.grid import FeederModel
 from engine.loadflow import nema_vuf, solve_feeder
-from engine.montecarlo import run_sweep
+from engine.montecarlo import run_monte_carlo, run_sweep
 from engine.pacer_core import PacerController
 from engine.simulation import run_trial, scenario_structure
 from engine.thermal import IECThermalModel, PerPhaseIECThermal
@@ -264,6 +264,42 @@ def test_per_phase_thermal_and_safety_flags() -> None:
     assert abs(a.hot_spot_c - b.hot_spot_c) < 1e-9 and abs(a.ageing_hours - b.ageing_hours) < 1e-9
 
 
+def test_module_adoption_degrades_toward_baseline() -> None:
+    """Phase 4 coverage: lower Module adoption puts more homes in pass-through, so
+    PACER's protection weakens toward the uncontrolled baseline. Full adoption draws
+    no extra RNG (byte-identical golden, covered by test_golden)."""
+    def blown(adopt):
+        mc = run_monte_carlo(Config(homes=200, mc_runs=4, seed=7, module_adoption=adopt),
+                             modes=[ControllerMode.PACER])
+        return mc.stats[ControllerMode.PACER].blowout_runs
+    full, half, none = blown(1.0), blown(0.5), blown(0.0)
+    assert full <= half <= none and none == 4  # no modules -> uncontrolled -> all blow
+
+
+def test_spoofed_beacon_cannot_worsen() -> None:
+    """Phase 4: a Beacon broadcasting deliberately too-high caps collapses to
+    PACER-only -- a cap can only reduce a device's duty, so a spoof never worsens
+    the restart (the 'signalling can only reduce load' safety claim)."""
+    for i in range(5):
+        pac = run_trial(Config(seed=7).with_mode(ControllerMode.PACER), i)
+        spoof = run_trial(Config(seed=7, beacon_spoofed=True).with_mode(ControllerMode.PACER_BEACON), i)
+        assert spoof.blew == pac.blew
+        assert spoof.peak_pu <= pac.peak_pu + 1e-9
+
+
+def test_estimator_noise_degrades_the_estimate() -> None:
+    """Phase 4: correlated noise on Rule 4's dV/dI (a shared-coupling term when the
+    population steps together) moves the self-impedance estimate off its clean value
+    and is deterministic. Default 0 leaves it untouched (golden)."""
+    clean = run_trial(Config(seed=7).with_mode(ControllerMode.PACER), 0)
+    cfg = Config(seed=7, estimator_noise_ohm=0.01).with_mode(ControllerMode.PACER)
+    noisy = run_trial(cfg, 0)
+    # the median z over ~290 devices sits at the prior for both; the noise shows in
+    # what the controller actually senses (the impedance-normalised stress signal)
+    assert not np.array_equal(noisy.stress_signal, clean.stress_signal)
+    assert np.array_equal(noisy.stress_signal, run_trial(cfg, 0).stress_signal)  # deterministic
+
+
 def _run_standalone() -> int:
     tests = [
         test_fault_pass_through_fires,
@@ -278,6 +314,9 @@ def _run_standalone() -> int:
         test_fuse_gg_fit_and_tcc,
         test_inrush_bites_lockstep_not_staggered,
         test_per_phase_thermal_and_safety_flags,
+        test_module_adoption_degrades_toward_baseline,
+        test_spoofed_beacon_cannot_worsen,
+        test_estimator_noise_degrades_the_estimate,
     ]
     failed = 0
     for t in tests:
