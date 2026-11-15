@@ -30,6 +30,8 @@ from engine.montecarlo import (
 from engine.simulation import TrialResult, run_trial, scenario_structure
 from engine.stats import two_proportion_z_test
 from theme import diagrams, phase_colors, semantic, theme_css, themed_figure
+from theme.technical import phasor_svg, single_line_svg
+from theme.viz3d import transformer_thermal_3d
 
 APP_VERSION = "0.4.0"
 BUILD_DATE = "2026-10-13"
@@ -1104,6 +1106,19 @@ def _sim_structure(active, theme):
     st.caption(f"Connected load {s['total_connected_kw']:.0f} kW across {s['n_devices']} devices. Per-phase rated "
                f"current {s['rated_phase_current_a']:.0f} A; fuse {s['fuse_current_a']:.0f} A/phase. The worst phase "
                "carries more than the others -- the imbalance the Beacon targets.")
+    config = active["config"]
+    _kicker("IEC single-line diagram & phasors (live values)")
+    bl = _mode_trials(config)["baseline"]
+    peak_phase = bl.phase_load_pu.max(axis=0)
+    blown = peak_phase >= _FUSE_MELT_PU
+    cL, cR = st.columns([3, 2])
+    with cL:
+        _svg(single_line_svg(config.nameplate_kva, s["fuse_current_a"], peak_phase, blown,
+                             v_ln=config.v_ln, homes_per_phase=s["homes_per_phase"]))
+    with cR:
+        _svg(phasor_svg(peak_phase))
+    st.caption("IEC single-line of the modelled feeder with live per-phase peak load and fuse status; the current "
+               "phasors show the imbalance, and the dashed neutral phasor grows as the phases diverge.")
     _back_to_top()
 
 
@@ -1149,6 +1164,15 @@ def _sim_environment(active, theme):
                         width='stretch', theme=None, config=_chart_config())
         st.caption("Three independent per-phase winding hot-spots (IEC 60076-7). Lockstep baseline loads the phases "
                    "unevenly, so one winding runs much hotter; the Beacon rebalances and the spread collapses.")
+    _kicker("3D transformer -- windings coloured by live hot-spot")
+    tr3 = trials["pacer_beacon"]
+    default_min = int(np.argmax(tr3.hot_spot_c))
+    minute = st.slider("Minute (scrub the restoration)", 0, tr3.total_minutes - 1, default_min, key="tx3d_min")
+    temps = tr3.hot_spot_phase_c[minute] if config.per_phase_thermal else np.full(3, tr3.hot_spot_c[minute])
+    st.plotly_chart(transformer_thermal_3d(temps, theme), width='stretch', theme=None, config=_chart_config())
+    if not config.per_phase_thermal:
+        st.caption("Enable 'Per-phase winding hot-spots' in the sidebar to colour each winding independently; without "
+                   "it the three share the single modelled hot-spot.")
     _back_to_top()
 
 

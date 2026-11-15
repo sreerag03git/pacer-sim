@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 6 — technical + 3D visuals (in progress)
+
+New theme modules, wired into the simulator (all computed from the run, theme-aware):
+- **3D transformer thermal** (`theme/viz3d.py`) — an oil tank + core + three phase
+  windings, each coloured by its live hot-spot temperature (per-phase when that
+  model is on), with a minute slider to scrub the restoration; the worst phase is
+  named. In the Environment view.
+- **IEC single-line diagram** (`theme/technical.py`) — grid -> Dyn transformer -> LV
+  busbar -> three fused phase feeders -> loads, labelled with live per-phase peak
+  load and fuse status. In the Structure view.
+- **Phasor diagram** (`theme/technical.py`) — the three current phasors scaled by
+  per-phase load with the neutral phasor (their vector sum) drawn dashed; it grows
+  as the phases diverge. Beside the single-line.
+
+Already shipped earlier: the fuse time-current curve (Phase 2) and the 3D
+mode-comparison + restart surface (Overview). Deferred: the fully animated restart
+playback, the 3D feeder network (needs per-home voltage snapshots stored), and the
+2-D ambient x fuse sensitivity heatmap.
+
 ## Phase 5 — Beacon evidence view
 
 A dedicated "Does the Beacon earn its cost?" simulator view (app-only; no engine
