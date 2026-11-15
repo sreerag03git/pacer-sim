@@ -1714,7 +1714,7 @@ def _page_walkthrough() -> None:
         sig = (p < 0.05) and (lo > 0)
         kind = "ok" if sig else "caution"
         verdict = (f"the Beacon's extra reduction <b>is</b> significant here (p = {p:.3g})" if sig
-                   else f"the Beacon shows <b>no</b> significant extra blow-out benefit here (p = {p:.3g}; the 95% CI "
+                   else f"the Beacon's extra blow-out benefit is <b>not statistically significant</b> here (p = {p:.3g}; the 95% CI "
                         f"{lo * 100:+.1f} to {hi * 100:+.1f} pp includes zero)")
         st.markdown(f'<div class="pacer-card {kind}"><h4>We let the statistics decide</h4>'
                     f'<p style="color:var(--muted)">On blow-outs, {verdict}. Where it is not justified, the Beacon is '
@@ -1765,7 +1765,7 @@ def _sim_beacon(active, theme):
                    f"significant (p = {p:.3g}; 95% CI {lo*100:+.1f} to {hi*100:+.1f} pp). Here the Beacon earns its cost.")
         kind = "ok"
     else:
-        verdict = (f"At this scenario the Beacon shows <b>no</b> significant extra benefit over PACER-Core on blow-outs "
+        verdict = (f"At this scenario the Beacon's extra reduction over PACER-Core is <b>not statistically significant</b> on blow-outs "
                    f"(p = {p:.3g}; the 95% CI {lo*100:+.1f} to {hi*100:+.1f} pp includes zero). We report the wash "
                    f"rather than tune the Beacon to look better.")
         kind = "caution"
