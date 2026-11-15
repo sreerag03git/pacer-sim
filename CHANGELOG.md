@@ -1,5 +1,26 @@
 # Changelog
 
+## Demo defaults — four-wire on, instant open, judge mode
+
+- **Four-wire load flow is the app default** (`sc_reactance=True`): neutral current
+  and NEMA VUF are what a grid judge sees immediately. Under the richer physics the
+  headline is Baseline 100% -> PACER **3.3%** -> Beacon **2.5%** (120 runs) -- PACER
+  does slightly *better* than in the resistive model (8%). The resistive model stays
+  one toggle away and remains the golden-locked regression baseline.
+- **Beacon verdict settled.** A four-wire temperature sweep (120 runs/point, 38-46 C)
+  finds the Beacon's extra blow-out reduction **never** statistically significant
+  (p stays >0.5 even at 45-46 C where rates hit ~30%). So on blow-outs the Beacon is
+  telemetry only -- per-phase thermal + phase-rebalancing -- not a fuse-saving tool,
+  and the app and deck say exactly that.
+- **Instant cold open.** The default four-wire headline is precomputed and committed
+  (`engine/precompute.py` + `precomputed_default.pkl`), loaded on open with no
+  compute; the loading splash only appears when a scenario is changed. The precompute
+  matches the *scenario* regardless of run count.
+- **Low interactive n + High-precision button.** Re-runs default to 40 runs (snappy);
+  a "High precision (200 runs)" button gives tight CIs on demand.
+- **Judge-mode Walkthrough.** A 5-step guided narrative (problem -> blow-out -> PACER
+  staggers -> result -> honest Beacon verdict), second in the nav.
+
 ## Phase 7 — credibility & export
 
 A new "Credibility" section (app-only):

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
@@ -27,6 +28,7 @@ from engine.montecarlo import (
     run_monte_carlo,
     run_sweep,
 )
+from engine.precompute import load_precomputed
 from engine.simulation import TrialResult, run_trial, scenario_structure
 from engine.stats import two_proportion_z_test
 from theme import diagrams, phase_colors, semantic, theme_css, themed_figure
@@ -160,9 +162,9 @@ def _back_to_top() -> None:
 # ---------------------------------------------------------------------------
 _SCENARIO_DEFAULTS = dict(
     sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
-    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=60, sc_seed=7,
+    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=40, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
-    sc_reactance=False, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,
+    sc_reactance=True, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,  # four-wire on by default
     sc_adoption=100, sc_spoofbeacon=False, sc_estnoise=False,
 )
 
@@ -176,6 +178,7 @@ def _init_state() -> None:
     st.session_state.setdefault("sim_trial", 0)
     st.session_state.setdefault("sweep", None)
     st.session_state.setdefault("mobile", False)
+    st.session_state.setdefault("walk_step", 0)
     for k, v in _SCENARIO_DEFAULTS.items():
         st.session_state.setdefault(k, v)
 
@@ -626,8 +629,9 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
                   help="Faulted devices fall back to pass-through, as if PACER were absent.")
         st.slider("Module adoption (%)", 0, 100, key="sc_adoption",
                   help="Homes with a PACER Module fitted; the rest run pass-through.")
-    with sb.expander("Advanced physics (opt-in, changes results)"):
-        st.caption("Off by default so the headline reproduces the validated figures.")
+    with sb.expander("Advanced physics"):
+        st.caption("Four-wire load flow is ON by default (the Schneider-grade model). The rest are opt-in; "
+                   "each changes the results. Turn four-wire off to reproduce the resistive deck-comparison figures.")
         st.checkbox("Four-wire load flow (R+jX, neutral current, VUF)", key="sc_reactance")
         st.checkbox("IEC 60269 gG fuse calibration", key="sc_fusegg")
         st.checkbox("Motor locked-rotor inrush", key="sc_inrush")
@@ -649,7 +653,9 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         sb.markdown(f'<span class="pacer-chip ok">configuration valid</span> '
                     f'<span class="pacer-chip accent">deterministic &middot; seed {config.seed}</span>',
                     unsafe_allow_html=True)
-    run_clicked = sb.button("Run simulation", type="primary", width='stretch', disabled=bool(problems))
+    run_clicked = sb.button(f"Run simulation ({int(ss.sc_runs)} runs)", type="primary", width='stretch', disabled=bool(problems))
+    hp_clicked = sb.button("High precision (200 runs)", width='stretch', disabled=bool(problems),
+                           help="Re-run this scenario at 200 Monte Carlo runs for tight confidence intervals.")
     if not st.session_state.confirm_reset:
         if sb.button("Reset results", width='stretch'):
             st.session_state.confirm_reset = True
@@ -668,43 +674,48 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
         if cc2.button("Cancel", width='stretch'):
             st.session_state.confirm_reset = False
             st.rerun()
-    return config, run_clicked
+    return config, run_clicked, hp_clicked
 
 
-def _do_run(config: Config) -> None:
-    holder = st.empty()
-    with holder.container():
-        st.markdown(
-            '<div class="pacer-loading">'
-            '<div class="ring"></div>'
-            '<div class="brand">PACER<span class="dot">&middot;</span>Sim</div>'
-            '<div class="rule"></div>'
-            '<p class="tag">A standards-grounded test bench for post-blackout restart. '
-            'Built to measure the restart surge honestly, not to flatter it.</p>'
-            '<div class="cols">'
-            '<div class="col"><div class="n">01</div><h4>The problem</h4>'
-            '<p>When a load-shedding block ends, every AC and charger restarts in lockstep and the ~2&times; '
-            'surge melts the transformer fuse.</p></div>'
-            '<div class="col"><div class="n">02</div><h4>The method</h4>'
-            '<p>Seven local, communication-free rules stagger and soften each restart; an optional Beacon '
-            'adds a per-phase fuse ceiling.</p></div>'
-            '<div class="col"><div class="n">03</div><h4>The rule</h4>'
-            '<p>Every number is computed here from a deterministic, standards-grounded engine. '
-            'Reproducible, and nothing is asserted.</p></div>'
-            '</div></div>',
-            unsafe_allow_html=True)
-        bar = st.progress(0.0, text="Starting")
-        last = {"bucket": -1}
+def _do_run(config: Config, allow_precomputed: bool = False) -> None:
+    # On first open the default scenario loads its committed, authoritative headline
+    # instantly (no compute). A manual run always computes at the chosen precision,
+    # so the sidebar count stays low and snappy and "High precision" runs at 200.
+    mc = load_precomputed(config) if allow_precomputed else None
+    if mc is None:
+        holder = st.empty()
+        with holder.container():
+            st.markdown(
+                '<div class="pacer-loading">'
+                '<div class="ring"></div>'
+                '<div class="brand">PACER<span class="dot">&middot;</span>Sim</div>'
+                '<div class="rule"></div>'
+                '<p class="tag">A standards-grounded test bench for post-blackout restart. '
+                'Built to measure the restart surge honestly, not to flatter it.</p>'
+                '<div class="cols">'
+                '<div class="col"><div class="n">01</div><h4>The problem</h4>'
+                '<p>When a load-shedding block ends, every AC and charger restarts in lockstep and the ~2&times; '
+                'surge melts the transformer fuse.</p></div>'
+                '<div class="col"><div class="n">02</div><h4>The method</h4>'
+                '<p>Seven local, communication-free rules stagger and soften each restart; an optional Beacon '
+                'adds a per-phase fuse ceiling.</p></div>'
+                '<div class="col"><div class="n">03</div><h4>The rule</h4>'
+                '<p>Every number is computed here from a deterministic, standards-grounded engine. '
+                'Reproducible, and nothing is asserted.</p></div>'
+                '</div></div>',
+                unsafe_allow_html=True)
+            bar = st.progress(0.0, text="Starting")
+            last = {"bucket": -1}
 
-        def cb(frac: float, msg: str) -> None:
-            frac = min(max(frac, 0.0), 1.0)
-            bucket = int(frac * 200)
-            if bucket != last["bucket"]:
-                last["bucket"] = bucket
-                bar.progress(frac, text=msg)
+            def cb(frac: float, msg: str) -> None:
+                frac = min(max(frac, 0.0), 1.0)
+                bucket = int(frac * 200)
+                if bucket != last["bucket"]:
+                    last["bucket"] = bucket
+                    bar.progress(frac, text=msg)
 
-        mc = run_monte_carlo(config, progress=cb)
-    holder.empty()
+            mc = run_monte_carlo(config, progress=cb)
+        holder.empty()
     structure = _compute_structure(config)
     st.session_state.active = {"key": config.key(), "config": config, "mc": mc,
                                "structure": structure, "ts": _dt.datetime.now()}
@@ -1643,7 +1654,85 @@ def _page_credibility() -> None:
     _back_to_top()
 
 
-_AREAS = ["Simulator", "Overview", "Problem & solution", "Impact & case", "Delivery", "Credibility", "Team & about"]
+def _page_walkthrough() -> None:
+    """A guided 5-step narrative for a judge with three minutes: problem -> blow-out
+    -> PACER staggers -> result -> honest Beacon verdict. Uses the live run."""
+    theme = st.session_state.theme
+    active = st.session_state.active
+    if active is None:
+        st.info("Open the Simulator once so the walkthrough has a run to narrate.")
+        return
+    mc, config, sem = active["mc"], active["config"], semantic(theme)
+    mcl = _mode_colors(theme)
+    trials = _mode_trials(config)
+    n = 5
+    step = min(st.session_state.get("walk_step", 0), n - 1)
+    _kicker(f"Guided walkthrough -- step {step + 1} of {n}")
+
+    if step == 0:
+        st.markdown("## 1 &middot; The problem: a coincident restart")
+        tr = trials["baseline"]
+        t = _time_axis(tr)
+        fig = themed_figure(theme, height=360)
+        fig.add_trace(go.Scatter(x=t, y=tr.phase_load_pu.max(axis=1), name="Baseline (no control)",
+                                 line=dict(color=mcl["baseline"], width=2)))
+        fig.add_hline(y=1.0, line=dict(color=sem["muted"], width=1, dash="dot"), annotation_text="rating")
+        fig.add_hline(y=_FUSE_MELT_PU, line=dict(color=sem["danger"], width=1, dash="dot"), annotation_text="fuse melts")
+        _add_event_markers(fig, tr, theme)
+        fig.update_layout(title="Worst-phase load after the cut", yaxis_title="x rating", xaxis_title="minutes from restoration")
+        st.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
+        st.markdown(f"When a load-shedding block ends, every AC and charger restarts at once. The load jumps to "
+                    f"**~{tr.phase_load_pu.max():.1f}x** the transformer rating -- straight past the fuse.")
+    elif step == 1:
+        st.markdown("## 2 &middot; The surge melts the fuse")
+        st.plotly_chart(_blowbar(mc, theme, height=340), width='stretch', theme=None, config=_chart_config())
+        b = mc.stats[ControllerMode.BASELINE]
+        st.markdown(f"Across **{mc.n_runs} randomised restarts**, the uncontrolled baseline blows the fuse in "
+                    f"**{b.blowout_runs}/{b.n_runs} ({b.blowout_runs / b.n_runs * 100:.0f}%)** -- a 2-hour cut becomes a longer blackout.")
+    elif step == 2:
+        st.markdown("## 3 &middot; PACER staggers and softens it")
+        st.plotly_chart(_overlay(theme, trials, lambda tr: tr.phase_load_pu.max(axis=1),
+                                 "Worst-phase load, three controllers", "x rating",
+                                 hlines=[(_FUSE_MELT_PU, "fuse melts", sem["danger"])]),
+                        width='stretch', theme=None, config=_chart_config())
+        st.markdown("Seven local, communication-free rules spread the restart over minutes and ramp each device up "
+                    "gently, holding the plateau **below the fuse** -- no central controller, no new wires.")
+    elif step == 3:
+        st.markdown("## 4 &middot; The result")
+        b, p_, be = (mc.stats[ControllerMode.BASELINE], mc.stats[ControllerMode.PACER],
+                     mc.stats[ControllerMode.PACER_BEACON])
+        _stat_tiles([
+            (f"{b.blowout_runs / b.n_runs * 100:.0f}% → {p_.blowout_runs / p_.n_runs * 100:.0f}%",
+             "fuse blow-outs, baseline → PACER", "ok"),
+            (f"{b.mean_homes_dark - p_.mean_homes_dark:.0f}", "more homes online per restoration", "ok"),
+            (f"{b.mean_peak_pu:.2f}x → {p_.mean_peak_pu:.2f}x", "peak load vs rating", "ok"),
+        ])
+        st.markdown("PACER-Core alone -- zero new infrastructure -- turns a near-certain blackout into a rare one.")
+    else:
+        st.markdown("## 5 &middot; The honest Beacon verdict")
+        diff, lo, hi, p = _beacon_marginal(mc.stats[ControllerMode.PACER], mc.stats[ControllerMode.PACER_BEACON])
+        sig = (p < 0.05) and (lo > 0)
+        kind = "ok" if sig else "caution"
+        verdict = (f"the Beacon's extra reduction <b>is</b> significant here (p = {p:.3g})" if sig
+                   else f"the Beacon shows <b>no</b> significant extra blow-out benefit here (p = {p:.3g}; the 95% CI "
+                        f"{lo * 100:+.1f} to {hi * 100:+.1f} pp includes zero)")
+        st.markdown(f'<div class="pacer-card {kind}"><h4>We let the statistics decide</h4>'
+                    f'<p style="color:var(--muted)">On blow-outs, {verdict}. Where it is not justified, the Beacon is '
+                    'per-phase thermal telemetry and phase-rebalancing -- not a blow-out tool. We report the number, '
+                    'not the story we wish it told.</p></div>', unsafe_allow_html=True)
+        st.caption("Open the Beacon view for the full test, or the Credibility page to reproduce any deck figure.")
+
+    b1, b2, _ = st.columns([1, 1, 4])
+    if b1.button("← Back", disabled=(step == 0), width='stretch', key="walk_back"):
+        st.session_state.walk_step = max(0, step - 1)
+        st.rerun()
+    if b2.button("Next →", disabled=(step == n - 1), width='stretch', key="walk_next"):
+        st.session_state.walk_step = min(n - 1, step + 1)
+        st.rerun()
+    _back_to_top()
+
+
+_AREAS = ["Simulator", "Walkthrough", "Overview", "Problem & solution", "Impact & case", "Delivery", "Credibility", "Team & about"]
 def _beacon_marginal(pac, bea):
     """Marginal blow-out reduction PACER-Core -> Beacon, with a 95% Wald CI and the
     pooled two-proportion p-value."""
@@ -1772,9 +1861,9 @@ def main() -> None:
     area = sb.radio("Section", _AREAS, key="section", label_visibility="collapsed")
     sb.markdown("---")
 
-    run_clicked = False
+    run_clicked = hp_clicked = False
     if area == "Simulator":
-        config, run_clicked = _sidebar_scenario(sb)
+        config, run_clicked, hp_clicked = _sidebar_scenario(sb)
     else:
         config = st.session_state.active["config"] if st.session_state.active else Config()
 
@@ -1782,15 +1871,20 @@ def main() -> None:
     st.markdown('<span id="main-content"></span>', unsafe_allow_html=True)
 
     active = st.session_state.active
-    # Auto-run the default scenario on first open so results show immediately.
-    if run_clicked or (active is None and area == "Simulator"):
-        _do_run(config)
+    if active is None and area == "Simulator":
+        _do_run(config, allow_precomputed=True)  # instant committed headline on first open
+        active = st.session_state.active
+    elif hp_clicked:
+        _do_run(replace(config, mc_runs=200))  # tight CIs on demand
+        active = st.session_state.active
+    elif run_clicked:
+        _do_run(config)  # compute at the (low) interactive count
         active = st.session_state.active
 
     if area == "Simulator":
         tc1, tc2 = st.columns([1, 3], vertical_alignment="bottom")
         tc1.number_input("Representative trial (scenario)", 0, 999, key="sim_trial")
-        if active is not None and active["key"] != config.key():
+        if active is not None and replace(active["config"], mc_runs=0).key() != replace(config, mc_runs=0).key():
             tc2.warning("Scenario changed since the last run -- press Run simulation to refresh.")
         tabs = st.tabs([name for name, _ in _SIM_VIEWS])
         for i, (name, fn) in enumerate(_SIM_VIEWS):
@@ -1801,6 +1895,8 @@ def main() -> None:
                     st.info("Set up a scenario in the sidebar (or pick a preset) and press Run simulation.")
                 else:
                     fn(active, theme)
+    elif area == "Walkthrough":
+        _page_walkthrough()
     elif area == "Overview":
         _page_overview()
     elif area == "Problem & solution":

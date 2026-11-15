@@ -33,14 +33,20 @@ html, body, [class*="css"], .stMarkdown, p, li, label, input, button, select, te
 .stApp { background: var(--bg); color: var(--text); }
 .block-container { padding-top: 0.6rem; padding-bottom: 4rem; max-width: 1280px; }
 
-/* Display type */
-h1, h2, h3, h4, h5, .pacer-display {
+/* Display type -- consistent vertical rhythm so sections align */
+h1, h2, h3, h4, h5, h6, .pacer-display {
   font-family: 'Space Grotesk', 'Inter', sans-serif; color: var(--text); letter-spacing: -0.01em;
+  margin-top: 0.6rem; margin-bottom: 0.5rem; line-height: 1.25;
 }
 h1 { font-size: 1.7rem; font-weight: 700; }
 h2 { font-size: 1.3rem; font-weight: 600; }
-h3 { font-size: 1.08rem; font-weight: 600; margin-top: 0.3rem; }
+h3 { font-size: 1.08rem; font-weight: 600; }
 h4 { font-size: 0.98rem; font-weight: 600; }
+h6 { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+/* tabular figures everywhere data lines up in columns */
+[data-testid="stTable"] td, [data-testid="stDataFrame"], .pacer-stat .n, [data-testid="stMetricValue"] {
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+}
 p, li, label, .stMarkdown { color: var(--text); }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -201,13 +207,14 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
   text-transform: uppercase; color: var(--muted); margin: 0.4rem 0 0.5rem; }
 .pacer-lead { color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0.2rem 0 0.9rem 0; }
 
-/* Stat tile -- defined (border + soft elevation) */
-.pacer-stat { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-  padding: 1.05rem 1.1rem; height: 100%; box-shadow: var(--shadow); transition: box-shadow 0.14s ease, border-color 0.14s ease; }
+/* Stat tile -- defined (border + soft elevation); label bottom-aligns across a row */
+.pacer-stat { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 1.05rem 1.1rem; height: 100%; box-shadow: var(--shadow);
+  transition: box-shadow 0.14s ease, border-color 0.14s ease; }
 .pacer-stat:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
 .pacer-stat .n { font-family: 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums;
-  font-size: 1.7rem; font-weight: 700; color: var(--text); line-height: 1.1; letter-spacing: -0.02em; }
-.pacer-stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.35; }
+  font-size: 1.7rem; font-weight: 700; color: var(--text); line-height: 1.15; letter-spacing: -0.02em; }
+.pacer-stat .l { color: var(--muted); font-size: 0.8rem; margin-top: auto; padding-top: 0.4rem; line-height: 1.35; }
 .pacer-stat.ok .n { color: var(--ok); }
 .pacer-stat.danger .n { color: var(--danger); }
 .pacer-stat.caution .n { color: var(--caution); }
