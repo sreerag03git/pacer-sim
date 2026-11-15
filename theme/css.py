@@ -54,9 +54,10 @@ a:hover { text-decoration: underline; }
 [data-testid="stMetricLabel"] { color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.82rem; }
 [data-testid="stMetricDelta"] { font-family: 'JetBrains Mono', monospace; }
 
-/* Metric -> flat bordered tile */
+/* Metric -> defined tile (border + soft elevation) */
 [data-testid="stMetric"] {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem 1rem;
+  box-shadow: var(--shadow);
 }
 [data-testid="stMetricValue"] {
   font-family: 'Space Grotesk', sans-serif; font-size: 1.7rem; font-weight: 600; color: var(--text);
@@ -118,8 +119,8 @@ a:hover { text-decoration: underline; }
 [data-baseweb="tab-highlight"] { background: var(--accent); height: 2px; }
 [data-baseweb="tab-border"] { background: transparent; height: 0; }
 
-/* Expander -- flat bordered panel */
-[data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+/* Expander -- defined panel */
+[data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; box-shadow: var(--shadow); }
 [data-testid="stExpander"] summary { color: var(--text); font-weight: 600; }
 [data-testid="stExpander"] summary:hover { color: var(--accent); }
 
@@ -170,37 +171,40 @@ a:focus-visible {
 
 /* ---- custom components -------------------------------------------------- */
 
-/* Sticky header -- a flat band with a hairline divider */
+/* Sticky header -- a clean top bar */
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:first-child .pacer-header-marker) {
   position: sticky; top: 0; z-index: 1000;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-  padding: 0.6rem 0.9rem 0.7rem; margin-bottom: 0.8rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(8px); -webkit-backdrop-filter: saturate(140%) blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1rem 0.75rem; margin-bottom: 1rem;
 }
-.pacer-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.22rem; color: var(--text); line-height: 1.05; letter-spacing: -0.02em; }
+.pacer-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.28rem; color: var(--text); line-height: 1.05; letter-spacing: -0.02em; }
 .pacer-title .dot { color: var(--accent); }
 .pacer-subtitle { color: var(--muted); font-size: 0.78rem; }
 .pacer-build { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 0.74rem; text-align: right; line-height: 1.5; }
 .pacer-build b { color: var(--text); font-weight: 600; }
 
-/* Hero -- a flat bordered panel with a thin accent top rule */
-.pacer-hero { position: relative; border-radius: var(--radius); overflow: hidden; padding: 2rem 2rem; margin: 0.3rem 0 1.2rem 0;
-  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-top: 2px solid var(--accent); }
-.pacer-hero .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+/* Hero -- a defined panel with a thin accent top rule */
+.pacer-hero { position: relative; border-radius: var(--radius); overflow: hidden; padding: 2.1rem 2.1rem; margin: 0.2rem 0 1.4rem 0;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-top: 2px solid var(--accent);
+  box-shadow: var(--shadow); }
+.pacer-hero .eyebrow { font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
 .pacer-hero h1 { color: var(--text); font-size: 2.05rem; font-weight: 700; margin: 0.4rem 0 0.3rem 0; line-height: 1.08; }
 .pacer-hero p { color: var(--muted); font-size: 1.0rem; max-width: 760px; margin: 0; line-height: 1.55; }
 .pacer-hero .tags { margin-top: 1.1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .pacer-hero .tag { font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; padding: 0.25rem 0.6rem; border-radius: var(--radius-sm);
   background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 
-/* Section kicker + lead */
-.pacer-kicker { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--accent); margin-bottom: 0.15rem; }
+/* Section label + lead -- a clean, quiet eyebrow (not a shouty mono tag) */
+.pacer-kicker { font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 0.06em; font-weight: 600;
+  text-transform: uppercase; color: var(--muted); margin: 0.4rem 0 0.5rem; }
 .pacer-lead { color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0.2rem 0 0.9rem 0; }
 
-/* Stat tile -- flat bordered */
+/* Stat tile -- defined (border + soft elevation) */
 .pacer-stat { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-  padding: 1rem 1.05rem; height: 100%; transition: border-color 0.12s ease; }
-.pacer-stat:hover { border-color: var(--accent); }
+  padding: 1.05rem 1.1rem; height: 100%; box-shadow: var(--shadow); transition: box-shadow 0.14s ease, border-color 0.14s ease; }
+.pacer-stat:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
 .pacer-stat .n { font-family: 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums;
   font-size: 1.7rem; font-weight: 700; color: var(--text); line-height: 1.1; letter-spacing: -0.02em; }
 .pacer-stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; line-height: 1.35; }
@@ -208,10 +212,10 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-stat.danger .n { color: var(--danger); }
 .pacer-stat.caution .n { color: var(--caution); }
 
-/* Content card -- flat bordered */
+/* Content card -- defined (border + soft elevation) */
 .pacer-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-  padding: 1.1rem 1.15rem; height: 100%; transition: border-color 0.12s ease; }
-.pacer-card:hover { border-color: var(--accent); }
+  padding: 1.15rem 1.2rem; height: 100%; box-shadow: var(--shadow); transition: box-shadow 0.14s ease, border-color 0.14s ease; }
+.pacer-card:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
 .pacer-card h4 { margin: 0 0 0.5rem 0; font-size: 0.98rem; }
 .pacer-card ul { margin: 0.2rem 0 0 1.05rem; padding: 0; }
 .pacer-card li { color: var(--muted); font-size: 0.86rem; margin: 0.25rem 0; line-height: 1.45; }
@@ -231,8 +235,11 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-foot { color: var(--muted); font-size: 0.76rem; margin-top: 2.2rem; padding-top: 0.9rem;
   font-family: 'JetBrains Mono', monospace; border-top: 1px solid var(--border); }
 
-/* Loading screen (shown while the opening analysis runs) */
-.pacer-loading { text-align: center; padding: 3.2rem 1rem 1.6rem; }
+/* Opening loading splash (shown while the analysis runs on first open) */
+.pacer-loading { text-align: center; padding: 4rem 1rem 2rem; }
+.pacer-loading .brand { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.5rem;
+  letter-spacing: -0.02em; color: var(--text); margin-bottom: 1.4rem; }
+.pacer-loading .brand .dot { color: var(--accent); }
 .pacer-loading .ring { width: 52px; height: 52px; margin: 0 auto 1.2rem; border-radius: 50%;
   border: 3px solid var(--border); border-top-color: var(--accent); animation: pacer-spin 0.9s linear infinite; }
 @keyframes pacer-spin { to { transform: rotate(360deg); } }

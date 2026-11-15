@@ -160,7 +160,7 @@ def _back_to_top() -> None:
 # ---------------------------------------------------------------------------
 _SCENARIO_DEFAULTS = dict(
     sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
-    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=200, sc_seed=7,
+    sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=40, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
     sc_reactance=False, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,
     sc_adoption=100, sc_spoofbeacon=False, sc_estnoise=False,
@@ -652,8 +652,10 @@ def _sidebar_scenario(sb) -> tuple[Config, bool]:
 def _do_run(config: Config) -> None:
     holder = st.empty()
     with holder.container():
-        st.markdown('<div class="pacer-loading"><div class="ring"></div>'
-                    '<h3>Running the analysis</h3>'
+        st.markdown('<div class="pacer-loading">'
+                    '<div class="brand">PACER<span class="dot">-</span>Sim</div>'
+                    '<div class="ring"></div>'
+                    '<h3>Preparing your results</h3>'
                     '<p class="msg">Simulating three controllers across the Monte Carlo set&hellip;</p></div>',
                     unsafe_allow_html=True)
         bar = st.progress(0.0, text="Starting")
