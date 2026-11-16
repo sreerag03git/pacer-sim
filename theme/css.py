@@ -17,17 +17,17 @@ from __future__ import annotations
 from theme.palette import palette
 
 _FONT_IMPORT = (
+    "@import url('https://cdn.jsdelivr.net/npm/@fontsource-variable/mona-sans/index.css');"
     "@import url('https://fonts.googleapis.com/css2?"
     "family=Inter:wght@400;500;600;700&"
-    "family=Space+Grotesk:wght@500;600;700&"
     "family=JetBrains+Mono:wght@400;500;600&display=swap');"
 )
 
 _RULES = """
-:root { --radius: 10px; --radius-sm: 7px; --radius-pill: 999px; }
+:root { --radius: 14px; --radius-sm: 8px; --radius-pill: 999px; }
 
 html, body, [class*="css"], .stMarkdown, p, li, label, input, button, select, textarea {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, -apple-system, sans-serif;
 }
 /* Flat neutral canvas -- the soft tiles earn their depth from shadow alone */
 .stApp { background: var(--bg); color: var(--text); }
@@ -35,7 +35,7 @@ html, body, [class*="css"], .stMarkdown, p, li, label, input, button, select, te
 
 /* Display type -- consistent vertical rhythm so sections align */
 h1, h2, h3, h4, h5, h6, .pacer-display {
-  font-family: 'Space Grotesk', 'Inter', sans-serif; color: var(--text); letter-spacing: -0.01em;
+  font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; color: var(--text); letter-spacing: -0.005em;
   margin-top: 0.6rem; margin-bottom: 0.5rem; line-height: 1.25;
 }
 h1 { font-size: 1.7rem; font-weight: 700; }
@@ -48,7 +48,7 @@ h6 { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: u
   font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
 }
 p, li, label, .stMarkdown { color: var(--text); }
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* Data / mono */
@@ -57,7 +57,7 @@ a:hover { text-decoration: underline; }
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
-[data-testid="stMetricLabel"] { color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.82rem; }
+[data-testid="stMetricLabel"] { color: var(--muted); font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-size: 0.82rem; }
 [data-testid="stMetricDelta"] { font-family: 'JetBrains Mono', monospace; }
 
 /* Metric -> defined tile (border + soft elevation) */
@@ -66,7 +66,7 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow);
 }
 [data-testid="stMetricValue"] {
-  font-family: 'Space Grotesk', sans-serif; font-size: 1.7rem; font-weight: 600; color: var(--text);
+  font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-size: 1.7rem; font-weight: 600; color: var(--text);
 }
 
 /* Sidebar -- flat, a single hairline divider */
@@ -74,7 +74,7 @@ a:hover { text-decoration: underline; }
 [data-testid="stSidebar"] .block-container { padding-top: 1rem; }
 /* config hierarchy: h3 = group (prominent, separated), h6 = sub-group (quiet) */
 [data-testid="stSidebar"] h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--text); font-family: 'Inter', sans-serif; font-weight: 700; margin: 1.2rem 0 0.4rem; }
+  color: var(--text); font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-weight: 700; margin: 1.2rem 0 0.4rem; }
 [data-testid="stSidebar"] h6 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--muted); font-weight: 600; margin: 0.75rem 0 0.1rem; }
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p { font-size: 0.86rem; }
@@ -91,30 +91,31 @@ a:hover { text-decoration: underline; }
 [data-testid="stSidebar"] div[role="radiogroup"] > label:hover { color: var(--text); background: var(--surface-2); }
 [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child { display: none; }  /* hide radio dot */
 [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-  color: var(--accent); font-weight: 600; background: var(--accent-soft); border-left-color: var(--accent);
+  color: var(--text); font-weight: 700; background: var(--accent-soft); border-left-color: var(--accent);
 }
 
 /* Buttons -- flat bordered; primary is solid accent */
 .stButton > button, .stDownloadButton > button {
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
-  border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: all 0.12s ease;
+  border-radius: var(--radius-pill); font-weight: 700; font-size: 0.9rem; padding: 0.4rem 1.1rem; transition: all 0.12s ease;
 }
-.stButton > button:hover, .stDownloadButton > button:hover { color: var(--accent); border-color: var(--accent); }
+.stButton > button:hover, .stDownloadButton > button:hover { color: var(--accent-ink); border-color: var(--accent); }
 .stButton > button:active, .stDownloadButton > button:active { background: var(--surface-2); }
 .stButton > button[kind="primary"] {
-  background: var(--accent); color: #fff; border-color: var(--accent);
+  background: var(--cta-bg); color: var(--cta-fg); border-color: var(--cta-bg);
 }
-.stButton > button[kind="primary"]:hover { filter: brightness(1.06); color: #fff; }
-.stButton > button[kind="primary"]:active { filter: brightness(0.96); }
+.stButton > button[kind="primary"]:hover { filter: brightness(1.12); color: var(--cta-fg); }
+.stButton > button[kind="primary"]:active { filter: brightness(0.92); }
 
 /* Inputs -- flat, hairline border */
 .stTextInput input, .stNumberInput input, [data-baseweb="input"], [data-baseweb="select"] > div,
 .stTextArea textarea {
-  background: var(--surface) !important; color: var(--text); border: 1px solid var(--border) !important; border-radius: var(--radius-sm);
+  background: var(--surface) !important; color: var(--text); border: 1px solid var(--border) !important; border-radius: var(--radius-pill);
 }
-[data-baseweb="input"], [data-baseweb="select"] > div { border-radius: var(--radius-sm); }
+[data-baseweb="input"], [data-baseweb="select"] > div { border-radius: var(--radius-pill); }
+.stTextArea textarea { border-radius: var(--radius); }
 .stNumberInput button { background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
-.stNumberInput button:hover { color: var(--accent); }
+.stNumberInput button:hover { color: var(--accent-ink); }
 [data-baseweb="slider"] div[role="slider"] { background: var(--accent); }
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div > div { background: var(--accent); }
 
@@ -125,19 +126,19 @@ a:hover { text-decoration: underline; }
   background: transparent; transition: color 0.12s ease;
 }
 [data-baseweb="tab"]:hover { color: var(--text); }
-[data-baseweb="tab"][aria-selected="true"] { color: var(--accent); }
+[data-baseweb="tab"][aria-selected="true"] { color: var(--text); }
 [data-baseweb="tab-highlight"] { background: var(--accent); height: 2px; }
 [data-baseweb="tab-border"] { background: transparent; height: 0; }
 
 /* Expander -- defined panel */
 [data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; box-shadow: var(--shadow); }
 [data-testid="stExpander"] summary { color: var(--text); font-weight: 600; }
-[data-testid="stExpander"] summary:hover { color: var(--accent); }
+[data-testid="stExpander"] summary:hover { color: var(--accent-ink); }
 
 /* DataFrame / table -- flat bordered */
 [data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 [data-testid="stTable"] table { border-color: var(--border); }
-[data-testid="stTable"] thead th { background: var(--surface-2); color: var(--muted); font-family: 'Inter', sans-serif; font-weight: 600; }
+[data-testid="stTable"] thead th { background: var(--surface-2); color: var(--muted); font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-weight: 600; }
 
 /* Progress -- flat track, accent fill */
 [data-testid="stProgress"] > div { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); }
@@ -189,7 +190,7 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
   border-bottom: 1px solid var(--border);
   padding: 0.7rem 1rem 0.75rem; margin-bottom: 1rem;
 }
-.pacer-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.28rem; color: var(--text); line-height: 1.05; letter-spacing: -0.02em; }
+.pacer-title { font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 1.28rem; color: var(--text); line-height: 1.05; letter-spacing: -0.02em; }
 .pacer-title .dot { color: var(--accent); }
 .pacer-subtitle { color: var(--muted); font-size: 0.78rem; }
 .pacer-build { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 0.74rem; text-align: right; line-height: 1.5; }
@@ -199,15 +200,15 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-hero { position: relative; border-radius: var(--radius); overflow: hidden; padding: 2.1rem 2.1rem; margin: 0.2rem 0 1.4rem 0;
   background: var(--surface); color: var(--text); border: 1px solid var(--border); border-top: 2px solid var(--accent);
   box-shadow: var(--shadow); }
-.pacer-hero .eyebrow { font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.pacer-hero .eyebrow { font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); font-weight: 600; }
 .pacer-hero h1 { color: var(--text); font-size: 2.05rem; font-weight: 700; margin: 0.4rem 0 0.3rem 0; line-height: 1.08; }
 .pacer-hero p { color: var(--muted); font-size: 1.0rem; max-width: 760px; margin: 0; line-height: 1.55; }
 .pacer-hero .tags { margin-top: 1.1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.pacer-hero .tag { font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; padding: 0.25rem 0.6rem; border-radius: var(--radius-sm);
+.pacer-hero .tag { font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; padding: 0.25rem 0.7rem; border-radius: var(--radius-pill);
   background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 
 /* Section label + lead -- a clean, quiet eyebrow (not a shouty mono tag) */
-.pacer-kicker { font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 0.06em; font-weight: 600;
+.pacer-kicker { font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-size: 0.72rem; letter-spacing: 0.06em; font-weight: 600;
   text-transform: uppercase; color: var(--muted); margin: 0.4rem 0 0.5rem; }
 .pacer-lead { color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0.2rem 0 0.9rem 0; }
 
@@ -216,7 +217,7 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
   background: var(--surface); padding: 1.05rem 1.1rem; height: 100%; box-shadow: var(--shadow);
   transition: box-shadow 0.14s ease, border-color 0.14s ease; }
 .pacer-stat:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
-.pacer-stat .n { font-family: 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums;
+.pacer-stat .n { font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums;
   font-size: 1.7rem; font-weight: 700; color: var(--text); line-height: 1.15; letter-spacing: -0.02em; }
 .pacer-stat .l { color: var(--muted); font-size: 0.8rem; margin-top: auto; padding-top: 0.4rem; line-height: 1.35; }
 .pacer-stat.ok .n { color: var(--ok); }
@@ -236,12 +237,12 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-card.danger h4 { color: var(--danger); }
 
 /* Chips -- flat bordered pills */
-.pacer-chip { display: inline-block; padding: 0.16rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.72rem;
+.pacer-chip { display: inline-block; padding: 0.16rem 0.7rem; border-radius: var(--radius-pill); font-size: 0.72rem;
   font-family: 'JetBrains Mono', monospace; border: 1px solid var(--border); color: var(--muted); background: var(--surface-2); }
 .pacer-chip.ok { color: var(--ok); }
 .pacer-chip.danger { color: var(--danger); }
 .pacer-chip.caution { color: var(--caution); }
-.pacer-chip.accent { color: var(--accent); }
+.pacer-chip.accent { color: var(--accent-ink); }
 
 .pacer-foot { color: var(--muted); font-size: 0.76rem; margin-top: 2.2rem; padding-top: 0.9rem;
   font-family: 'JetBrains Mono', monospace; border-top: 1px solid var(--border); }
@@ -251,7 +252,7 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-loading .ring { width: 44px; height: 44px; margin: 0 auto 1.2rem; border-radius: 50%;
   border: 3px solid var(--border); border-top-color: var(--accent); animation: pacer-spin 0.9s linear infinite; }
 @keyframes pacer-spin { to { transform: rotate(360deg); } }
-.pacer-loading .brand { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 2rem;
+.pacer-loading .brand { font-family: 'Mona Sans Variable', 'Mona Sans', 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 2rem;
   letter-spacing: -0.02em; color: var(--text); }
 .pacer-loading .brand .dot { color: var(--accent); }
 .pacer-loading .rule { width: 56px; height: 3px; background: var(--accent); border-radius: 2px; margin: 0.9rem auto 1.1rem; }
@@ -262,7 +263,7 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-loading .col:nth-child(2) { animation-delay: 0.45s; }
 .pacer-loading .col:nth-child(3) { animation-delay: 0.8s; }
 @keyframes pacer-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.pacer-loading .col .n { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--accent); margin-bottom: 0.35rem; }
+.pacer-loading .col .n { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--accent-ink); margin-bottom: 0.35rem; }
 .pacer-loading .col h4 { font-size: 1rem; margin: 0 0 0.4rem; color: var(--text); }
 .pacer-loading .col p { color: var(--muted); font-size: 0.86rem; line-height: 1.5; margin: 0; }
 @media (max-width: 680px) { .pacer-loading .cols { flex-direction: column; gap: 1.1rem; } }
@@ -271,7 +272,7 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:f
 .pacer-skip { position: absolute; left: -999px; top: 0; background: var(--accent); color: #fff; padding: 0.4rem 0.7rem; border-radius: 0 0 var(--radius-sm) 0; z-index: 2000; }
 .pacer-skip:focus { left: 0; }
 .pacer-top-link { font-size: 0.8rem; color: var(--muted); }
-.pacer-top-link:hover { color: var(--accent); }
+.pacer-top-link:hover { color: var(--accent-ink); }
 
 @media print {
   [data-testid="stSidebar"], [data-baseweb="tab-list"], .stButton, .pacer-skip { display: none !important; }
@@ -295,7 +296,8 @@ def theme_css(theme: str) -> str:
   --bg: {p['bg']}; --surface: {p['surface']}; --surface-2: {p['surface_2']};
   --panel: {p['panel']}; --panel-border: {p['panel_border']};
   --border: {p['border']}; --text: {p['text']}; --muted: {p['muted']};
-  --accent: {p['accent']}; --danger: {p['danger']}; --caution: {p['caution']}; --ok: {p['ok']};
+  --accent: {p['accent']}; --accent-ink: {p['accent_ink']}; --cta-bg: {p['cta_bg']}; --cta-fg: {p['cta_fg']};
+  --danger: {p['danger']}; --caution: {p['caution']}; --ok: {p['ok']};
   --accent-soft: {p['accent_soft']}; --danger-soft: {p['danger_soft']};
   --grid: {p['grid']}; --outage: {p['outage_band']};
   --gradient: {p['gradient']}; --gradient-soft: {p['gradient_soft']};

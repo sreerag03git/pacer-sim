@@ -2,10 +2,10 @@
 # colours before the injected CSS loads. The app's own toggle takes over at runtime.
 [theme]
 base = "light"
-primaryColor = "#4C5EC4"
-backgroundColor = "#E8EBEF"
-secondaryBackgroundColor = "#E8EBEF"
-textColor = "#272B33"
+primaryColor = "#EA4C89"
+backgroundColor = "#F8F8FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0D0C22"
 font = "sans serif"
 
 [client]
