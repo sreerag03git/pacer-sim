@@ -23,10 +23,11 @@ def _wrap(view_w: int, view_h: int, body: str, max_w: int = 960) -> str:
 
 
 def _box(x, y, w, h, title, sub="", accent="var(--accent)", rx=6, title_size=15, fill="var(--panel)"):
+    # Monochrome technical style: ink outline on a plain fill, no colour coding.
+    # (accent is kept in the signature for call-site compatibility, not used.)
     out = (
         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" '
-        f'style="fill:{fill};stroke:{accent};stroke-width:1.5"/>'
-        f'<rect x="{x}" y="{y}" width="4" height="{h}" rx="2" style="fill:{accent}"/>'
+        f'style="fill:{fill};stroke:var(--text);stroke-width:1.3"/>'
     )
     ty = y + (22 if sub else h / 2 + 5)
     out += (
@@ -43,10 +44,11 @@ def _box(x, y, w, h, title, sub="", accent="var(--accent)", rx=6, title_size=15,
 
 
 def _arrow(x1, y1, x2, y2, label="", color="var(--muted)", dashed=False, lx=None, ly=None, label_mono=True):
+    # Monochrome: ink lines; colour arg ignored (kept for call-site compatibility).
     dash = 'stroke-dasharray="5 4"' if dashed else ""
     out = (
         f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-        f'style="stroke:{color};stroke-width:1.5" {dash} marker-end="url(#arrowhead)"/>'
+        f'style="stroke:var(--text);stroke-width:1.3" {dash} marker-end="url(#arrowhead)"/>'
     )
     if label:
         lx = lx if lx is not None else (x1 + x2) / 2
@@ -54,7 +56,7 @@ def _arrow(x1, y1, x2, y2, label="", color="var(--muted)", dashed=False, lx=None
         font = _FM if label_mono else _FS
         out += (
             f'<text x="{lx}" y="{ly}" text-anchor="middle" '
-            f'style="{font};font-size:10.5px;fill:{color}">{label}</text>'
+            f'style="{font};font-size:10.5px;fill:var(--muted)">{label}</text>'
         )
     return out
 
@@ -62,7 +64,7 @@ def _arrow(x1, y1, x2, y2, label="", color="var(--muted)", dashed=False, lx=None
 def _defs(color="var(--muted)") -> str:
     return (
         '<defs><marker id="arrowhead" markerWidth="9" markerHeight="7" refX="8" refY="3.5" '
-        f'orient="auto"><polygon points="0 0, 9 3.5, 0 7" style="fill:{color}"/></marker></defs>'
+        'orient="auto"><polygon points="0 0, 9 3.5, 0 7" style="fill:var(--text)"/></marker></defs>'
     )
 
 
@@ -70,9 +72,9 @@ def _chip(x, y, text, color="var(--ok)"):
     w = 10 + len(text) * 6.4
     return (
         f'<rect x="{x}" y="{y}" width="{w:.0f}" height="20" rx="3" '
-        f'style="fill:none;stroke:{color};stroke-width:1"/>'
+        f'style="fill:none;stroke:var(--text);stroke-width:1"/>'
         f'<text x="{x + w/2:.0f}" y="{y + 14}" text-anchor="middle" '
-        f'style="{_FM};font-size:10.5px;fill:{color}">{text}</text>'
+        f'style="{_FM};font-size:10.5px;fill:var(--text)">{text}</text>'
     )
 
 
@@ -135,7 +137,7 @@ def surge_mechanism() -> str:
         x += w + gap
     # outcome stats
     b += (
-        f'<text x="20" y="180" style="{_FM};font-size:12px;fill:var(--danger)">'
+        f'<text x="20" y="180" style="{_FM};font-size:12px;fill:var(--text)">'
         f'200 / 200 restorations blow the fuse  -  ~197 of 200 homes left dark  -  '
         f'146 h insulation life lost (if over-fused)</text>'
     )
