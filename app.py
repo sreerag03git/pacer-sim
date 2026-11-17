@@ -1423,6 +1423,55 @@ def _sim_assimilation(active, theme):
         st.caption("Pick a variable and press Run sweep to trace how blow-outs respond as it changes, holding "
                    "everything else fixed -- a clean, un-rigged sensitivity curve.")
 
+    st.markdown("#### Sensitivity heatmap -- blow-out % across the ambient x fuse-tightness envelope")
+    sem = semantic(theme)
+    hc1, hc2 = st.columns([3, 1])
+    hc1.caption("Not one scenario but the whole envelope: hotter evenings down the rows, tighter fuses across the "
+                "columns, each cell coloured by its blow-out rate. Coarse by design so it runs in a few minutes.")
+    if hc2.button("Compute heatmap", width='stretch', key="hm_btn"):
+        amb_vals = [36.0, 39.0, 42.0, 44.0, 46.0]
+        fuse_vals = [0.85, 0.95, 1.05, 1.20, 1.35]
+        hm_modes = [ControllerMode.BASELINE, ControllerMode.PACER]
+        hbase = replace(config, mc_runs=10)
+        grids = {m: np.full((len(amb_vals), len(fuse_vals)), np.nan) for m in hm_modes}
+        holder = st.empty()
+        with holder.container():
+            st.markdown(f"Computing a {len(amb_vals)}x{len(fuse_vals)} grid x {len(hm_modes)} modes x "
+                        f"{hbase.mc_runs} runs ({len(amb_vals) * len(fuse_vals) * len(hm_modes) * hbase.mc_runs} "
+                        "trials)...")
+            bar = st.progress(0.0, text="Starting")
+            for ai, a in enumerate(amb_vals):
+                def rowcb(frac, msg, ai=ai):
+                    bar.progress((ai + frac) / len(amb_vals), text=msg)
+                sweep = run_sweep(replace(hbase, ambient_peak_c=a), "fuse_tightness", fuse_vals,
+                                  modes=hm_modes, progress=rowcb)
+                for m in hm_modes:
+                    grids[m][ai, :] = sweep.rate_pct[m]
+        holder.empty()
+        st.session_state.heatmap = {
+            "scenario": replace(config, mc_runs=0).key(), "amb": amb_vals, "fuse": fuse_vals,
+            "grids": {m.value: grids[m].tolist() for m in hm_modes}, "runs": hbase.mc_runs,
+        }
+    hm = st.session_state.get("heatmap")
+    if hm and hm["scenario"] == replace(config, mc_runs=0).key():
+        cscale = [[0.0, sem["ok"]], [0.5, sem["caution"]], [1.0, sem["danger"]]]
+        hcols = st.columns(2)
+        for col, mvv in zip(hcols, ["baseline", "pacer"]):
+            z = hm["grids"][mvv]
+            fig = themed_figure(theme, height=330)
+            fig.add_trace(go.Heatmap(
+                z=z, x=[f"{f:.2f}x" for f in hm["fuse"]], y=[f"{a:.0f}" for a in hm["amb"]],
+                zmin=0, zmax=100, colorscale=cscale, colorbar=dict(title="blow %"),
+                text=[[f"{v:.0f}" for v in row] for row in z], texttemplate="%{text}", textfont=dict(size=10)))
+            fig.update_layout(title=f"{_MODE_LABEL[mvv]} blow-out %", xaxis_title="fuse tightness (x rated)",
+                              yaxis_title="ambient peak (C)")
+            col.plotly_chart(fig, width='stretch', theme=None, config=_chart_config())
+        st.caption(f"{hm['runs']} runs/cell, {len(hm['amb'])}x{len(hm['fuse'])} grid -- a coarse map of the envelope, "
+                   "not tight confidence intervals. Baseline reddens across almost the whole space; PACER stays green "
+                   "until the extreme corner where even a staggered restart cannot save a very tight fuse on a 46 C night.")
+    else:
+        st.caption("Press Compute heatmap to sweep ambient x fuse tightness and colour each cell by its blow-out rate.")
+
     st.markdown("#### Robustness -- a spoofed Beacon cannot make things worse")
     from dataclasses import replace
     si = int(st.session_state.sim_trial)
