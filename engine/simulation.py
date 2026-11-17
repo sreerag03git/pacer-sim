@@ -98,6 +98,9 @@ class TrialResult:
     peak_hot_spot_c: float = 0.0
     minutes_hs_over_140: int = 0  # IEC 60076-7 advisory threshold
     minutes_hs_over_160: int = 0  # IEC 60076-7 bubbling / gas-risk threshold
+    # per-phase absolute blow minute (-1 if intact); drives the restart animation.
+    # Not part of scalar_summary(), so it does not affect the golden hash.
+    blow_minute_phase: np.ndarray = field(default_factory=lambda: np.full(3, -1, dtype=int), repr=False)
 
     APPLIANCE_LABELS =("Inverter AC", "Fixed AC", "Inverter charger", "E-rickshaw", "Water pump", "Base load")
 
@@ -412,6 +415,7 @@ def run_trial(config: Config, trial_index: int = 0) -> TrialResult:
         minutes_above_32=minutes_above_32,
         ageing_hours=float(thermal.ageing_hours),
         phases_blown=phases_blown,
+        blow_minute_phase=fuse.blow_minute.copy(),
         total_load_kw=ts_load,
         load_pu=ts_pu,
         phase_heat_pct=ts_heat,

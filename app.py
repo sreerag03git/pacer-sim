@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 from engine.config import Config, ControllerMode, HeatwavePreset
 from engine.fuse import IEC_GG_GATES, FuseBank, fit_gg_params
@@ -31,7 +32,8 @@ from engine.montecarlo import (
 from engine.precompute import load_precomputed
 from engine.simulation import TrialResult, run_trial, scenario_structure
 from engine.stats import two_proportion_z_test
-from theme import diagrams, phase_colors, semantic, theme_css, themed_figure
+from theme import diagrams, palette, phase_colors, semantic, theme_css, themed_figure
+from theme.restart_anim import restart_feeder_html
 from theme.technical import phasor_svg, single_line_svg
 from theme.viz3d import transformer_thermal_3d
 
@@ -1164,18 +1166,38 @@ def _sim_structure(active, theme):
                f"current {s['rated_phase_current_a']:.0f} A; fuse {s['fuse_current_a']:.0f} A/phase. The worst phase "
                "carries more than the others -- the imbalance the Beacon targets.")
     config = active["config"]
-    _kicker("IEC single-line diagram & phasors (live values)")
-    bl = _mode_trials(config)["baseline"]
-    peak_phase = bl.phase_load_pu.max(axis=0)
-    blown = peak_phase >= _FUSE_MELT_PU
-    cL, cR = st.columns([3, 2])
-    with cL:
-        _svg(single_line_svg(config.nameplate_kva, s["fuse_current_a"], peak_phase, blown,
-                             v_ln=config.v_ln, homes_per_phase=s["homes_per_phase"]))
-    with cR:
-        _svg(phasor_svg(peak_phase))
-    st.caption("IEC single-line of the modelled feeder with live per-phase peak load and fuse status; the current "
-               "phasors show the imbalance, and the dashed neutral phasor grows as the phases diverge.")
+    trials = _mode_trials(config)
+    ref = trials["baseline"]
+    _kicker("Restart player - the feeder replayed minute by minute (live engine data)")
+    # Window on the blackout -> restart -> aftermath; every frame is a real minute.
+    w0 = max(0, ref.restore_minute - 10)
+    w1 = min(ref.total_minutes, ref.restore_minute + 72)
+    modes = []
+    for mv in _MODE_ORDER:
+        tr = trials[mv]
+        bmp = tr.blow_minute_phase if getattr(tr, "blow_minute_phase", np.zeros(0)).size >= 3 else np.full(3, -1, dtype=int)
+        modes.append({
+            "label": _MODE_LABEL[mv],
+            "loads": [[round(float(tr.phase_load_pu[t, i]), 3) for i in range(3)] for t in range(w0, w1)],
+            "online": [int(round(float(tr.homes_online[t]))) for t in range(w0, w1)],
+            "blow": [int(bmp[i]) - ref.restore_minute if int(bmp[i]) >= ref.restore_minute else None
+                     for i in range(3)],
+        })
+    pal = palette(theme)
+    colors = {k: pal[k] for k in ("surface", "border", "text", "muted", "accent", "ok", "danger", "caution")}
+    components.html(
+        restart_feeder_html(modes, s["homes_per_phase"], s["fuse_current_a"], config.nameplate_kva,
+                            config.v_ln, ref.restore_minute, ref.outage_start, w0, colors,
+                            melt_pu=_FUSE_MELT_PU),
+        height=600, scrolling=False)
+    st.caption("Every frame is a real computed minute of this run: per-phase load from the four-wire model, each fuse "
+               "tripping at its own melt minute. Baseline rushes back in lockstep and a phase's fuse melts -> its homes "
+               "go dark; PACER staggers the restart so the fuses hold. Switch modes and scrub the timeline.")
+    _kicker("Three-phase + neutral phasors (live)")
+    peak_phase = ref.phase_load_pu.max(axis=0)
+    _svg(phasor_svg(peak_phase))
+    st.caption("The current phasors scale with per-phase load; the dashed neutral phasor is their vector sum, so it grows "
+               "as the phases diverge - the imbalance the Beacon rebalances (neutral current and VUF are charted in Sensing).")
     _back_to_top()
 
 
