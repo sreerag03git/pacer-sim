@@ -211,8 +211,8 @@ def feeder_topology() -> str:
                   f'<rect x="{hx-9}" y="{yy+22}" width="18" height="14" rx="2" '
                   f'style="fill:var(--surface);stroke:{col};stroke-width:1"/>')
     b += (f'<text x="20" y="330" style="{_FS};font-size:12px;fill:var(--muted)">'
-          f'Homes sit behind a short series impedance, so each home\'s voltage sag is produced by the aggregate load '
-          f'(what Rule 4 senses). The worst phase runs 10-20% above average.</text>')
+          f'Each home sits behind a series feeder impedance; unbalanced single-phase load returns through the shared '
+          f'neutral, skewing the three phase voltages that Rule 4 senses. Worst phase runs 10-20% above average.</text>')
     b += (f'<text x="20" y="352" style="{_FS};font-size:12px;fill:var(--muted)">'
           f'One fuse per phase: when it melts, every home on that phase goes dark - AC or not.</text>')
     b += _chip(760, 150, "Module in each home", "var(--ok)")
