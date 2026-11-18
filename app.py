@@ -166,7 +166,7 @@ _SCENARIO_DEFAULTS = dict(
     sc_mode="Baseline", sc_homes=200, sc_ac=60, sc_vuln=8, sc_nameplate=160.0, sc_tight=1.00,
     sc_outage=120, sc_ambient="Hot (42 C)", sc_custom=42, sc_runs=40, sc_seed=7,
     sc_invshare=45, sc_charger=40, sc_erick=12, sc_pump=35, sc_baseload=0.18, sc_faultprob=0,
-    sc_reactance=True, sc_fusegg=False, sc_inrush=False, sc_ppthermal=False,  # four-wire on by default
+    sc_reactance=True, sc_fusegg=True, sc_inrush=True, sc_ppthermal=False,  # four-wire + inrush + gG on by default
     sc_adoption=100, sc_spoofbeacon=False, sc_estnoise=False,
 )
 

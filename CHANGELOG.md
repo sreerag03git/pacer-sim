@@ -1,5 +1,21 @@
 # Changelog
 
+## Inrush + IEC gG fuse on by default
+
+The demo default now runs the full fuse physics -- motor locked-rotor inrush and the
+IEC 60269 gG fuse calibration are ON (`sc_inrush` / `sc_fusegg` default True), and the
+committed instant-open headline is recomputed with them. New headline (120 runs):
+Baseline **100%** -> PACER **0.0%** -> Beacon **0.0%** (peak 2.05x -> 1.21x -> 1.20x;
+homes dark 179 -> 0 -> 0). PACER now eliminates restart blow-outs outright: the gG curve
+melts fast at baseline's ~2x but tolerates PACER's staggered ~1.2x, and the inrush I2t
+impulse only deepens baseline's margin. The Beacon adds no marginal blow-out reduction
+over PACER-Core here (both 0%) -- consistent with the earlier sweep; its value is
+per-phase thermal telemetry, not fuse-saving.
+
+Emergent numbers, not tuned. The bare `Config()` engine default stays resistive / no-
+inrush / constant-fuse, so the byte-identical golden regression is unchanged -- the flip
+is in the app scenario defaults + the committed precompute only.
+
 ## Demo defaults — four-wire on, instant open, judge mode
 
 - **Four-wire load flow is the app default** (`sc_reactance=True`): neutral current

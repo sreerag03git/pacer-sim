@@ -17,9 +17,10 @@ from engine.montecarlo import run_monte_carlo
 
 _PATH = Path(__file__).with_name("precomputed_default.pkl")
 
-# The app's demo default: four-wire load flow on, 120 Monte Carlo runs. Must match
-# the scenario the sidebar produces at its defaults, or the instant-open won't fire.
-DEFAULT_DEMO = Config(use_reactance=True, mc_runs=120)
+# The app's demo default: four-wire load flow + motor inrush + IEC gG fuse on, 120
+# Monte Carlo runs. Must match the scenario the sidebar produces at its defaults,
+# or the instant-open won't fire.
+DEFAULT_DEMO = Config(use_reactance=True, model_inrush=True, fuse_iec_gg=True, mc_runs=120)
 
 
 def load_precomputed(config: Config):
